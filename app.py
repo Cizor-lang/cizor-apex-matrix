@@ -76,6 +76,9 @@ if "last_trade_status" not in st.session_state:
 if "ws_connected" not in st.session_state:
     st.session_state.ws_connected = False
 
+# --- FIXED TRACKING CORE VARIABLES ---
+max_runs_per_trend = 3
+
 # --- INTERACTIVE DASHBOARD SIDEBAR CONTROLS ---
 st.sidebar.markdown(f"## 🛠️ CIZOR OUTPOST: CONTROLS")
 st.sidebar.markdown(f"**AUTHOR NAME:** CIZOR THE BADDEST")
@@ -113,10 +116,8 @@ with col_right:
 def get_live_tick_and_execute(token, symbol, amount, strategy, run_trade=False):
     """Establishes a raw WebSocket handshake to Deriv for zero-delay stream and purchase."""
     try:
-        # Connect directly to Deriv API Endpoint
         ws = create_connection("wss://ws.derivws.com/websockets/v3?app_id=1089", sslopt={"cert_reqs": ssl.CERT_NONE})
         
-        # 1. Authorize Token Session
         auth_req = json.dumps({"authorize": token})
         ws.send(auth_req)
         auth_res = json.loads(ws.recv())
@@ -127,7 +128,6 @@ def get_live_tick_and_execute(token, symbol, amount, strategy, run_trade=False):
         balance = float(auth_res["authorize"]["balance"])
         st.session_state.real_balance = balance
         
-        # 2. If signal matched, trigger instant contract payload command
         if run_trade and strategy != "NEUTRAL":
             contract_type = "DIGITOVER" if "OVER" in strategy else "DIGITUNDER"
             barrier_target = strategy.split(" ")[-1]
@@ -151,7 +151,6 @@ def get_live_tick_and_execute(token, symbol, amount, strategy, run_trade=False):
             ws.close()
             return buy_res, "TRADE_EXECUTED", balance
             
-        # 3. Pull single live tick snapshot cleanly
         tick_req = json.dumps({"ticks": symbol, "count": 1})
         ws.send(tick_req)
         tick_res = json.loads(ws.recv())
@@ -165,7 +164,6 @@ def get_live_tick_and_execute(token, symbol, amount, strategy, run_trade=False):
 
 # --- THE CONTINUOUS EXECUTION LOOP ---
 while True:
-    # 1000% Active Auto-Market Rotation Strategy Engine
     st.session_state.market_ticks_count += 1
     if st.session_state.market_ticks_count >= st.session_state.market_lock_duration:
         old_market = st.session_state.current_market
@@ -180,20 +178,17 @@ while True:
 
     # --- DUAL-ENGINE TICK GENERATION VECTOR ---
     if st.session_state.account_mode == "LIVE" and deriv_token:
-        # PULL FROM REAL LIVE DERIV CONNECTIONS
         _, network_result, updated_bal = get_live_tick_and_execute(deriv_token, selected_symbol, calculated_stake, "NEUTRAL", run_trade=False)
         if isinstance(network_result, (int, float)):
             live_price_str = f"{network_result:.2f}"
             live_tick_digit = int(live_price_str[-1])
             confidence_signal = "📡 [CONNECTED TO DERIV LIVE WEBSOCKET SECURE FLOW]"
         else:
-            # Fallback if connection drops temporarily
             time.sleep(1.0)
             live_price_str = f"{random.uniform(750.00, 1250.00):.2f}"
             live_tick_digit = int(live_price_str[-1])
             confidence_signal = f"⚠️ [API LINK FAULT: {network_result}]"
     else:
-        # EXACT ORIGINAL COLAB SIMULATION PACING ENGINE
         time.sleep(1.0)
         live_price_str = f"{random.uniform(750.00, 1250.00):.2f}"
         live_tick_digit = int(live_price_str[-1])
@@ -204,8 +199,6 @@ while True:
         st.session_state.digit_history.pop(0)
 
     total_ticks = len(st.session_state.digit_history)
-
-    # Calculate exact digit spectrum allocations
     frequencies = {i: (st.session_state.digit_history.count(i) / total_ticks) * 100 if total_ticks > 0 else 0 for i in range(10)}
 
     under_2_density = frequencies[0] + frequencies[1]
@@ -243,7 +236,6 @@ while True:
             target_trigger_digits = [3, 4]
             action_authorized = True
         else:
-            # 🛡️ SAFETY ADAPTIVE PIVOT CHANNELS
             under_8_density = sum([frequencies[x] for x in range(8)])
             over_2_density = sum([frequencies[x] for x in range(3, 10)])
             if under_8_density > 85.0:
@@ -303,16 +295,12 @@ while True:
             if live_tick_digit == sniper_intercept_digit:
                 st.success(f"🔥 ZERO-DELAY CONTRACT ENTRY TRIGGERED: RUNNING [{strategy_choice}] MATRIX 🔥")
                 
-                # --- INTERCEPT LIVE ACCOUNT EXECUTION VS SIMULATOR ---
                 if st.session_state.account_mode == "LIVE" and deriv_token:
-                    # Fire Real API Order Payload
                     response, status, _ = get_live_tick_and_execute(deriv_token, selected_symbol, calculated_stake, strategy_choice, run_trade=True)
-                    
                     st.session_state.total_trades += 1
                     st.session_state.current_trend_runs += 1
                     
                     if response and "error" not in response:
-                        # Direct Win/Loss Parsing from Deriv API Server Engine response
                         profit = float(response["buy"].get("profit", 0))
                         if profit > 0:
                             st.session_state.total_wins += 1
@@ -323,7 +311,6 @@ while True:
                     else:
                         st.session_state.last_trade_status = f"❌ API REJECTION: {response.get('error', {}).get('message', 'Network Drop')}"
                 else:
-                    # ORIGINAL COLAB MATHEMATICAL RUN ENGINE
                     st.session_state.total_trades += 1
                     st.session_state.current_trend_runs += 1
                     outcome_roll = random.uniform(0, 100)
