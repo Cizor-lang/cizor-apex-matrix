@@ -44,7 +44,7 @@ MARKETS_1S = list(MARKET_MAP.keys())
 
 # --- ENGINE SESSION STATE TRACKING MATRIX ---
 if "tracked_balance" not in st.session_state:
-    st.session_state.tracked_balance = 10.00  # Baseline tracking starts at $10.00 USD
+    st.session_state.tracked_balance = 10.00  
 if "detected_account_type" not in st.session_state:
     st.session_state.detected_account_type = "UNLINKED SIMULATION"
 if "total_trades" not in st.session_state:
@@ -144,7 +144,7 @@ standard_calculated_stake = max(base_stake, round(st.session_state.tracked_balan
 
 # 1000% Certainty Sniper targets automatically shift sizing to scale small accounts rapidly (Between 10% and 30%)
 if st.session_state.tracked_balance <= 15.00:
-    high_certainty_stake = 1.50 # Forces a bold extraction setting for tiny limits
+    high_certainty_stake = 1.50 # Forces an aggressive $1.50 setup on tiny accounts to grow rapidly
 elif st.session_state.tracked_balance <= 50.00:
     high_certainty_stake = round(st.session_state.tracked_balance * 0.20, 2) # 20% Aggressive acceleration
 else:
@@ -189,7 +189,7 @@ def parse_credentials_and_sync(token, symbol, amount, strategy, run_trade=False)
         st.session_state.gateway_authorized = True
         
         # CONTINUOUS RE-ADAPTATION LOGIC FOR EXTRACTIONS/WITHDRAWALS
-        # If the balance shifts on the broker side due to a withdrawal, the bot snaps directly to it
+        # If the balance shifts on the broker side due to a withdrawal or manual top-up, the bot updates instantly
         if abs(st.session_state.tracked_balance - server_actual_balance) > 0.01 and not run_trade:
             st.session_state.tracked_balance = server_actual_balance
 
@@ -248,7 +248,6 @@ while True:
 
     # --- DUAL-ALIGNED INTERCEPT TRANSMITTER ---
     if st.session_state.active_token:
-        # Pings live Deriv markets directly to generate tick streams and verify accurate funding lines
         _, network_result, server_bal = parse_credentials_and_sync(st.session_state.active_token, selected_symbol, standard_calculated_stake, "NEUTRAL", run_trade=False)
         if isinstance(network_result, (int, float)):
             live_price_str = f"{network_result:.2f}"
@@ -260,7 +259,7 @@ while True:
             live_tick_digit = int(live_price_str[-1])
             confidence_signal = f"⚠️ [BROKER TIMEOUT: {network_result}]"
     else:
-        # Local training loop if no API key is initialized
+        # Local sandbox testing loop if no API key is initialized
         time.sleep(1.0)
         live_price_str = f"{random.uniform(750.00, 1250.00):.2f}"
         live_tick_digit = int(live_price_str[-1])
@@ -289,7 +288,7 @@ while True:
     recent_ticks = st.session_state.digit_history[-6:] if total_ticks >= 6 else st.session_state.digit_history
 
     if not st.session_state.system_cooldown_active and total_ticks >= 20:
-        # 🔥 HIGH CERTAINTY EXPLOIT CHANNELS (Compounding matrix jumps to high extraction stakes)
+        # 🔥 HIGH CERTAINTY EXPLOIT CHANNELS (Jumps to 10%-30% high aggressive stakes)
         if frequencies[8] > 26.0 and recent_ticks[-1] == 8:
             strategy_choice = "OVER 8"
             payout_multiplier = 8.00
@@ -319,7 +318,7 @@ while True:
             is_1000_percent_sure = True
             active_stake = high_certainty_stake
         else:
-            # 🛡️ THE STABILITY HIGH FREQUENCY WORKERS (Safely extracts consecutive profits using massive windows)
+            # 🛡️ THE STABILITY FREQUENT CHANNELS (Captures regular consecutive wins using massive 70% windows)
             under_8_density = sum([frequencies[x] for x in range(8)])
             over_2_density = sum([frequencies[x] for x in range(3, 10)])
             
@@ -353,7 +352,7 @@ while True:
         sure_badge = "🔥 [1000% SNAP COMPOUNDING SYSTEM ARMED]" if is_1000_percent_sure else "🛡️ [HIGH-FREQUENCY SAFE DENSITY WAVE]"
         st.code(
             f"=====================================================================================\n"
-            f"⚡ CIZOR APEX APERITIF PROFILE LOGGED IN\n"
+            f"⚡ CHITI ENGINE SYSTEM ARCHITECTURE ONLINE\n"
             f"=====================================================================================\n"
             f"ACCOUNT VECTOR INFRASTRUCTURE: {st.session_state.detected_account_type.upper()}\n"
             f"TARGET DIGIT SPECTRUM FEED   : {confidence_signal}\n"
@@ -416,7 +415,7 @@ while True:
                         payout_gains = active_stake * payout_multiplier
                         st.session_state.tracked_balance += payout_gains
                         st.session_state.total_wins += 1
-                        st.session_state.last_trade_status = f"🟢 SIMULATION WIN: +${payout_gains:.2f} COMPASS SECURED"
+                        st.session_state.last_trade_status = f"🟢 SIMULATION WIN: +${payout_gains:.2f} BALANCE SECURED"
                     else:
                         st.session_state.tracked_balance -= active_stake
                         st.session_state.total_losses += 1
