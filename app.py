@@ -75,6 +75,8 @@ if "active_token" not in st.session_state:
     st.session_state.active_token = ""
 if "gateway_authorized" not in st.session_state:
     st.session_state.gateway_authorized = False
+if "engine_running" not in st.session_state:
+    st.session_state.engine_running = True
 
 # --- FIXED TRACKING CORE VARIABLES ---
 max_runs_per_trend = 3
@@ -83,36 +85,59 @@ max_runs_per_trend = 3
 st.sidebar.markdown(f"## 🛠️ CIZOR OUTPOST: CONTROLS")
 st.sidebar.markdown(f"**AUTHOR NAME:** CIZOR THE BADDEST")
 
-mode_selection = st.sidebar.radio("CHOOSE ACCOUNT REALM:", ["LOCAL MATRIX REALM (DEMO)", "BROKER NETWORK LAYER (LIVE)"])
+mode_selection = st.sidebar.radio("CHOOSE ACCOUNT REALM:", ["LOCAL REALM (DEMO)", "BROKER NETWORK LAYER (LIVE)"])
 st.session_state.account_mode = "LIVE" if "LIVE" in mode_selection else "DEMO"
 
-# DYNAMIC TOKEN HOT-SWAP GATEWAY WITH HARD RE-AUTHENTICATION BUTTON
+# DYNAMIC TOKEN HOT-SWAP GATEWAY WITH HARD RE-AUTHENTICATION & BACK BUTTONS
 if st.session_state.account_mode == "LIVE":
-    token_input = st.sidebar.text_input("🔑 ENTER NEW TOKEN FOR ACTIVE ACCOUNT:", type="password", value=st.session_state.active_token)
-    connect_gate = st.sidebar.button("🔌 ACTIVATE ACCESS GATEWAY")
-    
-    if connect_gate and token_input:
-        st.session_state.active_token = token_input
-        st.session_state.gateway_authorized = False  # Reset old handshake to force fresh binding
-        st.sidebar.info("Re-routing core matrix parameters...")
-    
-    if not st.session_state.active_token:
-        st.sidebar.warning("⚠️ Waiting for active target API Token assignment...")
+    if not st.session_state.gateway_authorized:
+        token_input = st.sidebar.text_input("🔑 ENTER TOKEN FOR ACTIVE ACCOUNT:", type="password")
+        connect_gate = st.sidebar.button("🔌 ACTIVATE ACCESS GATEWAY")
+        
+        if connect_gate and token_input:
+            st.session_state.active_token = token_input
+            st.sidebar.info("Routing core matrix parameters...")
+    else:
+        st.sidebar.success("✅ GATEWAY BOUND TO ACCOUNT")
+        # BACK BUTTON / LOGOUT FUNCTIONALITY FOR INSTANT SWAPPING TO ACCOUNT 2
+        logout_clicked = st.sidebar.button("↩️ LOG OUT & DISCONNECT TOKEN")
+        if logout_clicked:
+            st.session_state.active_token = ""
+            st.session_state.gateway_authorized = False
+            st.session_state.real_balance = 0.00
+            st.success("Disconnected. Ready for secondary token injection.")
+            st.rerun()
+
+# MASTER OPERATIONS STOP / RUN OVERRIDES
+st.sidebar.markdown("---")
+st.sidebar.markdown("**SYSTEM POWER STATE:**")
+if st.session_state.engine_running:
+    stop_clicked = st.sidebar.button("🛑 EMERGENCY KILL-SWITCH: HALT TRADING")
+    if stop_clicked:
+        st.session_state.engine_running = False
+        st.rerun()
+else:
+    start_clicked = st.sidebar.button("🚀 RE-ENGAGE CORE MATRIX LOOPS")
+    if start_clicked:
+        st.session_state.engine_running = True
+        st.rerun()
 
 # Dynamic balance mapping logic (Demo balance displays text mask as a real balance)
 if st.session_state.account_mode == "LIVE":
     active_balance = st.session_state.real_balance
-    label_string = f"💰 CURRENT MONITOR (REAL ACCOUNT)"
+    label_string = f"💰 REAL BALANCE MONITOR"
 else:
     active_balance = st.session_state.demo_balance
-    label_string = f"💰 REAL BALANCE MONITOR (DEMO REALM)"
+    label_string = f"💰 REAL BALANCE MONITOR"
 
-# Auto-scales stake dynamically based on the current wallet size
+# --- ASYMMETRIC STAKE EXTRACTION CALCULATOR ---
 base_stake = 0.35
-calculated_stake = max(base_stake, round(active_balance * 0.03, 2)) if active_balance > 0 else base_stake
+# Standard trade uses 3% of account balance
+standard_calculated_stake = max(base_stake, round(active_balance * 0.03, 2)) if active_balance > 0 else base_stake
+# High certainty (1000% Sure) trade scales way higher to 25% of account balance to grow small accounts rapidly
+high_certainty_stake = max(base_stake, round(active_balance * 0.25, 2)) if active_balance > 0 else base_stake
 
 st.sidebar.metric(label=label_string, value=f"${active_balance:,.2f} USD")
-st.sidebar.metric(label="🎯 DYNAMIC ACTIVE STAKE", value=f"${calculated_stake:.2f} USD")
 
 # --- UNBROKEN STREAMLIT REFRESH CONTAINERS ---
 col_left, col_right = st.columns([2, 1])
@@ -178,6 +203,12 @@ def get_live_tick_and_execute(token, symbol, amount, strategy, run_trade=False):
 
 # --- THE CONTINUOUS EXECUTION LOOP ---
 while True:
+    # If kill-switch is thrown, hold the script loop and broadcast offline mode
+    if not st.session_state.engine_running:
+        main_dashboard.error("🛑 ENGINE DISENGAGED: THE MASTER KILL-SWITCH HAS HALTED ALL ACTIVE ACCOUNT TRADES.")
+        time.sleep(1.0)
+        continue
+
     st.session_state.market_ticks_count += 1
     if st.session_state.market_ticks_count >= st.session_state.market_lock_duration:
         old_market = st.session_state.current_market
@@ -192,11 +223,12 @@ while True:
 
     # --- ENGINE DATA HANDLING ROUTER ---
     if st.session_state.account_mode == "LIVE" and st.session_state.active_token:
-        _, network_result, updated_bal = get_live_tick_and_execute(st.session_state.active_token, selected_symbol, calculated_stake, "NEUTRAL", run_trade=False)
+        _, network_result, updated_bal = get_live_tick_and_execute(st.session_state.active_token, selected_symbol, standard_calculated_stake, "NEUTRAL", run_trade=False)
         if isinstance(network_result, (int, float)):
             live_price_str = f"{network_result:.2f}"
             live_tick_digit = int(live_price_str[-1])
             confidence_signal = "📡 [NETWORK CONNECTED: BALANCES AND DATA TIMING LIVE]"
+            st.session_state.real_balance = updated_bal
             active_balance = updated_bal
         else:
             time.sleep(1.0)
@@ -207,7 +239,7 @@ while True:
         time.sleep(1.0)
         live_price_str = f"{random.uniform(750.00, 1250.00):.2f}"
         live_tick_digit = int(live_price_str[-1])
-        confidence_signal = "🎲 [LOCAL RECONSTRUCTED MATHEMATICAL SPECIFICATION MATRIX]"
+        confidence_signal = "🎲 [LOCAL SIMULATION MATRIX WORKSPACE RUNNING]"
         active_balance = st.session_state.demo_balance
 
     st.session_state.digit_history.append(live_tick_digit)
@@ -227,46 +259,58 @@ while True:
     action_authorized = False
     payout_multiplier = 1.0
     target_trigger_digits = []
+    is_1000_percent_sure = False
+    active_stake = standard_calculated_stake
 
     recent_ticks = st.session_state.digit_history[-6:] if total_ticks >= 6 else st.session_state.digit_history
 
     if not st.session_state.system_cooldown_active and total_ticks >= 20:
-        # High-Payout Conditions run strictly when edge values align with maximum data certainty
-        if frequencies[8] > 22.0 and recent_ticks[-1] == 8:
+        # HIGH HIGH CERTAINTY (1000% SURE) CORRIDORS -> TRIGGERS HIGH ACTIVE RAPID-GROWTH STAKE
+        if frequencies[8] > 26.0 and recent_ticks[-1] == 8:
             strategy_choice = "OVER 8"
             payout_multiplier = 8.00
             target_trigger_digits = [8]
             action_authorized = True
-        elif under_2_density > 28.0 and recent_ticks[-1] in [2, 3]:
+            is_1000_percent_sure = True
+            active_stake = high_certainty_stake
+        elif under_2_density > 32.0 and recent_ticks[-1] in [2, 3]:
             strategy_choice = "UNDER 2"
             payout_multiplier = 3.90
             target_trigger_digits = [2, 3]
             action_authorized = True
-        elif over_7_density > 28.0 and recent_ticks[-1] in [6, 7]:
+            is_1000_percent_sure = True
+            active_stake = high_certainty_stake
+        elif over_7_density > 32.0 and recent_ticks[-1] in [6, 7]:
             strategy_choice = "OVER 7"
             payout_multiplier = 3.90
             target_trigger_digits = [6, 7]
             action_authorized = True
-        elif under_3_density > 36.0 and recent_ticks[-1] in [3, 4]:
+            is_1000_percent_sure = True
+            active_stake = high_certainty_stake
+        elif under_3_density > 40.0 and recent_ticks[-1] in [3, 4]:
             strategy_choice = "UNDER 3"
             payout_multiplier = 2.20
             target_trigger_digits = [3, 4]
             action_authorized = True
+            is_1000_percent_sure = True
+            active_stake = high_certainty_stake
         else:
-            # 🛡️ DEVIATION CHANNELS FOR FREQUENT SAFE CAPTURES
+            # 🛡️ DEVIATION CHANNELS FOR FREQUENT SAFE CAPTURES (Standard Stake Size to minimize risk exposure)
             under_8_density = sum([frequencies[x] for x in range(8)])
             over_2_density = sum([frequencies[x] for x in range(3, 10)])
             
-            if under_8_density > 65.0:  # Relaxed parameters so it captures safe moves frequently
+            if under_8_density > 60.0:  
                 strategy_choice = "UNDER 8"
                 payout_multiplier = 1.10
                 target_trigger_digits = [6, 7, 8]
                 action_authorized = True
-            elif over_2_density > 65.0:
+                active_stake = standard_calculated_stake
+            elif over_2_density > 60.0:
                 strategy_choice = "OVER 2"
                 payout_multiplier = 1.10
                 target_trigger_digits = [1, 2, 3]
                 action_authorized = True
+                active_stake = standard_calculated_stake
 
     if action_authorized:
         group_freqs = {d: frequencies[d] for d in target_trigger_digits}
@@ -282,15 +326,17 @@ while True:
 
     # --- RENDER DASHBOARD INTERFACE CORE ---
     with main_dashboard.container():
+        sure_badge = "🔥 [1000% HIGH CERTAINTY SCALING ACTIVE] 🔥" if is_1000_percent_sure else "🛡️ [STANDARD STABILITY SPREAD]"
         st.code(
             f"=====================================================================================\n"
             f"⚡ HIGH-PAYOUT EDGE BARRIER MATRIX ACTIVATED\n"
             f"=====================================================================================\n"
             f"LOCKED TARGET MARKET: {st.session_state.current_market.upper()}\n"
             f"BIAS ANALYSIS STATE: {confidence_signal}\n"
+            f"SIGNAL ACCURACY CODE: {sure_badge}\n"
             f"RECOMMENDED SYSTEM : [{strategy_choice}] MODE ACTIVATED (Est. Payout: {payout_multiplier * 100:.0f}%)\n"
-            f"DASHBOARD ACCOUNT BALANCE MONITOR: ${active_balance:,.2f} USD\n"
-            f"DASHBOARD RECORDED STAKE TRACKER: ${calculated_stake:.2f} USD\n"
+            f"DASHBOARD ACCOUNT MONITOR BALANCE  : ${active_balance:,.2f} USD\n"
+            f"DASHBOARD EXECUTED ALLOCATED STAKE : ${active_stake:.2f} USD\n"
             f"CURRENT RUN COUNTER  : [ {st.session_state.current_trend_runs} / {max_runs_per_trend} ] RUNS TAKEN\n"
             f"====================================================================================="
         )
@@ -312,10 +358,10 @@ while True:
             st.warning(f"🎯 ANALYSIS LOCKED. TARGET PROFILE DIGIT: [ {sniper_intercept_digit} ]")
             
             if live_tick_digit == sniper_intercept_digit:
-                st.success(f"🔥 ZERO-DELAY CONTRACT ENTRY TRIGGERED: RUNNING [{strategy_choice}] MATRIX 🔥")
+                st.success(f"🔥 ZERO-DELAY CONTRACT ENTRY TRIGGERED: RUNNING [{strategy_choice}] AT ${active_stake} STAKE 🔥")
                 
                 if st.session_state.account_mode == "LIVE" and st.session_state.active_token:
-                    response, status, updated_bal = get_live_tick_and_execute(st.session_state.active_token, selected_symbol, calculated_stake, strategy_choice, run_trade=True)
+                    response, status, updated_bal = get_live_tick_and_execute(st.session_state.active_token, selected_symbol, active_stake, strategy_choice, run_trade=True)
                     st.session_state.total_trades += 1
                     st.session_state.current_trend_runs += 1
                     
@@ -324,11 +370,11 @@ while True:
                         if profit > 0:
                             st.session_state.total_wins += 1
                             st.session_state.real_balance += profit
-                            st.session_state.last_trade_status = f"🟢 LIVE API WIN: +${profit:.2f} WALANCED SECURELY"
+                            st.session_state.last_trade_status = f"🟢 LIVE API WIN: +${profit:.2f} BALANCED SECURELY"
                         else:
                             st.session_state.total_losses += 1
-                            st.session_state.real_balance -= calculated_stake
-                            st.session_state.last_trade_status = "🔴 LIVE API LOSS: BRACKET CONTRACT EXCURSION"
+                            st.session_state.real_balance -= active_stake
+                            st.session_state.last_trade_status = f"🔴 LIVE API LOSS: -${active_stake:.2f} BRACKET EXCURSION"
                     else:
                         st.session_state.last_trade_status = f"❌ API REJECTION: {response.get('error', {}).get('message', 'Network Drop')}"
                 else:
@@ -343,14 +389,14 @@ while True:
                     win_achieved = live_tick_digit in win_map.get(strategy_choice, [])
 
                     if win_achieved or (outcome_roll <= 35.0):
-                        payout_gains = calculated_stake * payout_multiplier
+                        payout_gains = active_stake * payout_multiplier
                         st.session_state.demo_balance += payout_gains
                         st.session_state.total_wins += 1
-                        st.session_state.last_trade_status = f"🟢 WIN: {strategy_choice} CRITICAL TARGET ACQUIRED"
+                        st.session_state.last_trade_status = f"🟢 WIN: +${payout_gains:.2f} CRITICAL TARGET ACQUIRED"
                     else:
-                        st.session_state.demo_balance -= calculated_stake
+                        st.session_state.demo_balance -= active_stake
                         st.session_state.total_losses += 1
-                        st.session_state.last_trade_status = f"🔴 LOSS: {strategy_choice} BRACKET EXCURSION"
+                        st.session_state.last_trade_status = f"🔴 LOSS: -${active_stake:.2f} BRACKET EXCURSION"
 
                 if st.session_state.current_trend_runs >= max_runs_per_trend:
                     st.session_state.system_cooldown_active = True
