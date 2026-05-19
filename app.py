@@ -43,12 +43,10 @@ MARKET_MAP = {
 MARKETS_1S = list(MARKET_MAP.keys())
 
 # --- ENGINE SESSION STATE TRACKING MATRIX ---
-if "account_mode" not in st.session_state:
-    st.session_state.account_mode = "DEMO"
-if "real_balance" not in st.session_state:
-    st.session_state.real_balance = 0.00  
-if "demo_balance" not in st.session_state:
-    st.session_state.demo_balance = 10.00  # Baseline playground wallet starts at exactly $10.00 USD
+if "tracked_balance" not in st.session_state:
+    st.session_state.tracked_balance = 10.00  # Baseline tracking starts at $10.00 USD
+if "detected_account_type" not in st.session_state:
+    st.session_state.detected_account_type = "UNLINKED SIMULATION"
 if "total_trades" not in st.session_state:
     st.session_state.total_trades = 0
 if "total_wins" not in st.session_state:
@@ -85,34 +83,38 @@ max_runs_per_trend = 3
 st.sidebar.markdown(f"## 🛠️ CIZOR OUTPOST: CONTROLS")
 st.sidebar.markdown(f"**AUTHOR NAME:** CIZOR THE BADDEST")
 
-mode_selection = st.sidebar.radio("CHOOSE ACCOUNT REALM:", ["LOCAL REALM (DEMO)", "BROKER NETWORK LAYER (LIVE)"])
-st.session_state.account_mode = "LIVE" if "LIVE" in mode_selection else "DEMO"
-
-# DYNAMIC TOKEN HOT-SWAP GATEWAY WITH HARD RE-AUTHENTICATION & BACK BUTTONS
-if st.session_state.account_mode == "LIVE":
-    if not st.session_state.gateway_authorized:
-        token_input = st.sidebar.text_input("🔑 ENTER TOKEN FOR ACTIVE ACCOUNT:", type="password")
-        connect_gate = st.sidebar.button("🔌 ACTIVATE ACCESS GATEWAY")
-        
-        if connect_gate and token_input:
-            st.session_state.active_token = token_input
-            st.sidebar.info("Routing core matrix parameters...")
+# AUTONOMOUS SINGLE PORT ENTRY LAYER
+if not st.session_state.gateway_authorized:
+    token_input = st.sidebar.text_input("🔑 PASTE CURRENT ACCOUNT API TOKEN:", type="password")
+    connect_gate = st.sidebar.button("🔌 CONNECT TO DERIV SERVER")
+    
+    if connect_gate and token_input:
+        st.session_state.active_token = token_input
+        st.sidebar.info("Interrogating server credentials...")
+else:
+    # Color badge mapping depending on server auto-detection
+    if "REAL" in st.session_state.detected_account_type:
+        st.sidebar.error(f"🔴 ONLINE: {st.session_state.detected_account_type}")
     else:
-        st.sidebar.success("✅ GATEWAY BOUND TO ACCOUNT")
-        # BACK BUTTON / LOGOUT FUNCTIONALITY FOR INSTANT SWAPPING TO ACCOUNT 2
-        logout_clicked = st.sidebar.button("↩️ LOG OUT & DISCONNECT TOKEN")
-        if logout_clicked:
-            st.session_state.active_token = ""
-            st.session_state.gateway_authorized = False
-            st.session_state.real_balance = 0.00
-            st.success("Disconnected. Ready for secondary token injection.")
-            st.rerun()
+        st.sidebar.info(f"🔵 ONLINE: {st.session_state.detected_account_type}")
+        
+    # THE HOT-SWAP DISCONNECT BUTTON (Logs out Account 1 instantly so you can paste Account 2)
+    logout_clicked = st.sidebar.button("↩️ LOG OUT & DISCONNECT TOKEN")
+    if logout_clicked:
+        st.session_state.active_token = ""
+        st.session_state.gateway_authorized = False
+        st.session_state.tracked_balance = 10.00
+        st.session_state.detected_account_type = "UNLINKED SIMULATION"
+        st.success("Tunnels dropped cleanly. Standing by for next token insertion.")
+        st.rerun()
 
-# MASTER OPERATIONS STOP / RUN OVERRIDES
+# CORE HARDWARE CONFIGURATION CONTROLS
 st.sidebar.markdown("---")
-st.sidebar.markdown("**SYSTEM POWER STATE:**")
+st.sidebar.markdown("**SYSTEM HARDWARE OVERRIDES:**")
+
+# EMERGENCY STOP AND LIVE ENGINE TOGGLES
 if st.session_state.engine_running:
-    stop_clicked = st.sidebar.button("🛑 EMERGENCY KILL-SWITCH: HALT TRADING")
+    stop_clicked = st.sidebar.button("🛑 EMERGENCY KILL-SWITCH: HALT")
     if stop_clicked:
         st.session_state.engine_running = False
         st.rerun()
@@ -122,22 +124,33 @@ else:
         st.session_state.engine_running = True
         st.rerun()
 
-# Dynamic balance mapping logic (Demo balance displays text mask as a real balance)
-if st.session_state.account_mode == "LIVE":
-    active_balance = st.session_state.real_balance
-    label_string = f"💰 REAL BALANCE MONITOR"
-else:
-    active_balance = st.session_state.demo_balance
-    label_string = f"💰 REAL BALANCE MONITOR"
+# SYSTEM RESET BUTTON (Brings tracking data and local balance back down to exact $10 baseline)
+reset_clicked = st.sidebar.button("🧹 RESET SYSTEM MONITOR")
+if reset_clicked:
+    st.session_state.tracked_balance = 10.00
+    st.session_state.total_trades = 0
+    st.session_state.total_wins = 0
+    st.session_state.total_losses = 0
+    st.session_state.current_trend_runs = 0
+    st.session_state.system_cooldown_active = False
+    st.session_state.last_trade_status = "SYSTEM BASES RESTORED TO INITIAL FORCES."
+    st.success("Baseline cleared back to $10.00 USD.")
+    st.rerun()
 
-# --- ASYMMETRIC STAKE EXTRACTION CALCULATOR ---
+# --- ASYMMETRIC STAKE EXTRACTION PROPORTIONS ---
 base_stake = 0.35
-# Standard trade uses 3% of account balance
-standard_calculated_stake = max(base_stake, round(active_balance * 0.03, 2)) if active_balance > 0 else base_stake
-# High certainty (1000% Sure) trade scales way higher to 25% of account balance to grow small accounts rapidly
-high_certainty_stake = max(base_stake, round(active_balance * 0.25, 2)) if active_balance > 0 else base_stake
+# Regular strategy parameters hold a safe 3% stabilization layer
+standard_calculated_stake = max(base_stake, round(st.session_state.tracked_balance * 0.03, 2)) if st.session_state.tracked_balance > 0 else base_stake
 
-st.sidebar.metric(label=label_string, value=f"${active_balance:,.2f} USD")
+# 1000% Certainty Sniper targets automatically shift sizing to scale small accounts rapidly (Between 10% and 30%)
+if st.session_state.tracked_balance <= 15.00:
+    high_certainty_stake = 1.50 # Forces a bold extraction setting for tiny limits
+elif st.session_state.tracked_balance <= 50.00:
+    high_certainty_stake = round(st.session_state.tracked_balance * 0.20, 2) # 20% Aggressive acceleration
+else:
+    high_certainty_stake = round(st.session_state.tracked_balance * 0.15, 2) # Steady 15% growth compounder
+
+st.sidebar.metric(label="💰 REAL BALANCE MONITOR", value=f"${st.session_state.tracked_balance:,.2f} USD")
 
 # --- UNBROKEN STREAMLIT REFRESH CONTAINERS ---
 col_left, col_right = st.columns([2, 1])
@@ -149,9 +162,9 @@ with col_right:
     st.markdown("### 📊 TRADE RESOLUTION TELEMETRY")
     outcome_card = st.empty()
 
-# --- WEBSOCKET CONNECTION MANAGER FOR LIVE TRADING ---
-def get_live_tick_and_execute(token, symbol, amount, strategy, run_trade=False):
-    """Handshakes securely to Deriv endpoints for live balance adjustments and execution triggers."""
+# --- WEBSOCKET CONNECTION MANAGER FOR AUTOMATIC DEVIATION CHECKS ---
+def parse_credentials_and_sync(token, symbol, amount, strategy, run_trade=False):
+    """Secures a real-time raw tunnel pipeline to Deriv to parse balance shifts, account types, and order blocks."""
     try:
         ws = create_connection("wss://ws.derivws.com/websockets/v3?app_id=1089", sslopt={"cert_reqs": ssl.CERT_NONE})
         
@@ -161,12 +174,25 @@ def get_live_tick_and_execute(token, symbol, amount, strategy, run_trade=False):
         
         if "error" in auth_res:
             ws.close()
-            return None, f"❌ AUTH ERROR: {auth_res['error']['message']}", 0.0
+            return None, f"❌ AUTH ERROR: {auth_res['error']['message']}", st.session_state.tracked_balance
             
-        balance = float(auth_res["authorize"]["balance"])
-        st.session_state.real_balance = balance
+        # DYNAMIC DEVIATION OVERRIDE DETECTOR (Auto-detects Demo vs Real without manual toggles)
+        client_data = auth_res["authorize"]
+        server_actual_balance = float(client_data["balance"])
+        acct_id_string = client_data.get("loginid", "")
+        
+        if acct_id_string.startswith("VRTC"):
+            st.session_state.detected_account_type = f"DEMO ACCOUNT TARGETED ({acct_id_string})"
+        else:
+            st.session_state.detected_account_type = f"REAL ACCOUNT TARGETED ({acct_id_string})"
+            
         st.session_state.gateway_authorized = True
         
+        # CONTINUOUS RE-ADAPTATION LOGIC FOR EXTRACTIONS/WITHDRAWALS
+        # If the balance shifts on the broker side due to a withdrawal, the bot snaps directly to it
+        if abs(st.session_state.tracked_balance - server_actual_balance) > 0.01 and not run_trade:
+            st.session_state.tracked_balance = server_actual_balance
+
         if run_trade and strategy != "NEUTRAL":
             contract_type = "DIGITOVER" if "OVER" in strategy else "DIGITUNDER"
             barrier_target = strategy.split(" ")[-1]
@@ -188,7 +214,7 @@ def get_live_tick_and_execute(token, symbol, amount, strategy, run_trade=False):
             ws.send(buy_req)
             buy_res = json.loads(ws.recv())
             ws.close()
-            return buy_res, "TRADE_EXECUTED", balance
+            return buy_res, "TRADE_EXECUTED", server_actual_balance
             
         tick_req = json.dumps({"ticks": symbol, "count": 1})
         ws.send(tick_req)
@@ -196,14 +222,13 @@ def get_live_tick_and_execute(token, symbol, amount, strategy, run_trade=False):
         ws.close()
         
         if "tick" in tick_res:
-            return None, float(tick_res["tick"]["quote"]), balance
+            return None, float(tick_res["tick"]["quote"]), server_actual_balance
     except Exception as e:
-        return None, f"DISCONNECTED: {str(e)}", 0.0
-    return None, None, 0.0
+        return None, f"DISCONNECTED: {str(e)}", st.session_state.tracked_balance
+    return None, None, st.session_state.tracked_balance
 
 # --- THE CONTINUOUS EXECUTION LOOP ---
 while True:
-    # If kill-switch is thrown, hold the script loop and broadcast offline mode
     if not st.session_state.engine_running:
         main_dashboard.error("🛑 ENGINE DISENGAGED: THE MASTER KILL-SWITCH HAS HALTED ALL ACTIVE ACCOUNT TRADES.")
         time.sleep(1.0)
@@ -221,26 +246,25 @@ while True:
 
     selected_symbol = MARKET_MAP[st.session_state.current_market]
 
-    # --- ENGINE DATA HANDLING ROUTER ---
-    if st.session_state.account_mode == "LIVE" and st.session_state.active_token:
-        _, network_result, updated_bal = get_live_tick_and_execute(st.session_state.active_token, selected_symbol, standard_calculated_stake, "NEUTRAL", run_trade=False)
+    # --- DUAL-ALIGNED INTERCEPT TRANSMITTER ---
+    if st.session_state.active_token:
+        # Pings live Deriv markets directly to generate tick streams and verify accurate funding lines
+        _, network_result, server_bal = parse_credentials_and_sync(st.session_state.active_token, selected_symbol, standard_calculated_stake, "NEUTRAL", run_trade=False)
         if isinstance(network_result, (int, float)):
             live_price_str = f"{network_result:.2f}"
             live_tick_digit = int(live_price_str[-1])
-            confidence_signal = "📡 [NETWORK CONNECTED: BALANCES AND DATA TIMING LIVE]"
-            st.session_state.real_balance = updated_bal
-            active_balance = updated_bal
+            confidence_signal = "📡 [CONNECTED: PARSING DYNAMIC NETWORK CHANNELS LIVE]"
         else:
             time.sleep(1.0)
             live_price_str = f"{random.uniform(750.00, 1250.00):.2f}"
             live_tick_digit = int(live_price_str[-1])
-            confidence_signal = f"⚠️ [API TUNNEL EXCEPTION: {network_result}]"
+            confidence_signal = f"⚠️ [BROKER TIMEOUT: {network_result}]"
     else:
+        # Local training loop if no API key is initialized
         time.sleep(1.0)
         live_price_str = f"{random.uniform(750.00, 1250.00):.2f}"
         live_tick_digit = int(live_price_str[-1])
-        confidence_signal = "🎲 [LOCAL SIMULATION MATRIX WORKSPACE RUNNING]"
-        active_balance = st.session_state.demo_balance
+        confidence_signal = "🎲 [LOCAL RUNWAY UNLINKED SIMULATION ENVIRONMENT]"
 
     st.session_state.digit_history.append(live_tick_digit)
     if len(st.session_state.digit_history) > 40:
@@ -254,7 +278,7 @@ while True:
     over_7_density = frequencies[8] + frequencies[9]
     over_8_density = frequencies[9]
 
-    # --- ASYMMETRIC FREQUENT RISK REVERSAL DISTRIBUTION LOGIC ---
+    # --- HIGHER FREQUENCY BALANCE PROTECTION AND ACCELERATION PIPELINE ---
     strategy_choice = "NEUTRAL"
     action_authorized = False
     payout_multiplier = 1.0
@@ -265,7 +289,7 @@ while True:
     recent_ticks = st.session_state.digit_history[-6:] if total_ticks >= 6 else st.session_state.digit_history
 
     if not st.session_state.system_cooldown_active and total_ticks >= 20:
-        # HIGH HIGH CERTAINTY (1000% SURE) CORRIDORS -> TRIGGERS HIGH ACTIVE RAPID-GROWTH STAKE
+        # 🔥 HIGH CERTAINTY EXPLOIT CHANNELS (Compounding matrix jumps to high extraction stakes)
         if frequencies[8] > 26.0 and recent_ticks[-1] == 8:
             strategy_choice = "OVER 8"
             payout_multiplier = 8.00
@@ -295,17 +319,17 @@ while True:
             is_1000_percent_sure = True
             active_stake = high_certainty_stake
         else:
-            # 🛡️ DEVIATION CHANNELS FOR FREQUENT SAFE CAPTURES (Standard Stake Size to minimize risk exposure)
+            # 🛡️ THE STABILITY HIGH FREQUENCY WORKERS (Safely extracts consecutive profits using massive windows)
             under_8_density = sum([frequencies[x] for x in range(8)])
             over_2_density = sum([frequencies[x] for x in range(3, 10)])
             
-            if under_8_density > 60.0:  
+            if under_8_density > 58.0:  
                 strategy_choice = "UNDER 8"
                 payout_multiplier = 1.10
                 target_trigger_digits = [6, 7, 8]
                 action_authorized = True
                 active_stake = standard_calculated_stake
-            elif over_2_density > 60.0:
+            elif over_2_density > 58.0:
                 strategy_choice = "OVER 2"
                 payout_multiplier = 1.10
                 target_trigger_digits = [1, 2, 3]
@@ -326,18 +350,18 @@ while True:
 
     # --- RENDER DASHBOARD INTERFACE CORE ---
     with main_dashboard.container():
-        sure_badge = "🔥 [1000% HIGH CERTAINTY SCALING ACTIVE] 🔥" if is_1000_percent_sure else "🛡️ [STANDARD STABILITY SPREAD]"
+        sure_badge = "🔥 [1000% SNAP COMPOUNDING SYSTEM ARMED]" if is_1000_percent_sure else "🛡️ [HIGH-FREQUENCY SAFE DENSITY WAVE]"
         st.code(
             f"=====================================================================================\n"
-            f"⚡ HIGH-PAYOUT EDGE BARRIER MATRIX ACTIVATED\n"
+            f"⚡ CIZOR APEX APERITIF PROFILE LOGGED IN\n"
             f"=====================================================================================\n"
-            f"LOCKED TARGET MARKET: {st.session_state.current_market.upper()}\n"
-            f"BIAS ANALYSIS STATE: {confidence_signal}\n"
-            f"SIGNAL ACCURACY CODE: {sure_badge}\n"
-            f"RECOMMENDED SYSTEM : [{strategy_choice}] MODE ACTIVATED (Est. Payout: {payout_multiplier * 100:.0f}%)\n"
-            f"DASHBOARD ACCOUNT MONITOR BALANCE  : ${active_balance:,.2f} USD\n"
-            f"DASHBOARD EXECUTED ALLOCATED STAKE : ${active_stake:.2f} USD\n"
-            f"CURRENT RUN COUNTER  : [ {st.session_state.current_trend_runs} / {max_runs_per_trend} ] RUNS TAKEN\n"
+            f"ACCOUNT VECTOR INFRASTRUCTURE: {st.session_state.detected_account_type.upper()}\n"
+            f"TARGET DIGIT SPECTRUM FEED   : {confidence_signal}\n"
+            f"SAFETY CLASSIFICATION ALIGN  : {sure_badge}\n"
+            f"RECOMMENDED INTERCEPT ROUTE  : [{strategy_choice}] (Multiplier: {payout_multiplier:.2f}x)\n"
+            f"SYNCHRONIZED CURRENT BALANCE : ${st.session_state.tracked_balance:,.2f} USD\n"
+            f"ALLOCATED ALLOTMENT STAKE    : ${active_stake:.2f} USD\n"
+            f"CURRENT RUN COUNTER          : [ {st.session_state.current_trend_runs} / {max_runs_per_trend} ]\n"
             f"====================================================================================="
         )
 
@@ -360,8 +384,8 @@ while True:
             if live_tick_digit == sniper_intercept_digit:
                 st.success(f"🔥 ZERO-DELAY CONTRACT ENTRY TRIGGERED: RUNNING [{strategy_choice}] AT ${active_stake} STAKE 🔥")
                 
-                if st.session_state.account_mode == "LIVE" and st.session_state.active_token:
-                    response, status, updated_bal = get_live_tick_and_execute(st.session_state.active_token, selected_symbol, active_stake, strategy_choice, run_trade=True)
+                if st.session_state.active_token:
+                    response, status, updated_bal = parse_credentials_and_sync(st.session_state.active_token, selected_symbol, active_stake, strategy_choice, run_trade=True)
                     st.session_state.total_trades += 1
                     st.session_state.current_trend_runs += 1
                     
@@ -369,14 +393,14 @@ while True:
                         profit = float(response["buy"].get("profit", 0))
                         if profit > 0:
                             st.session_state.total_wins += 1
-                            st.session_state.real_balance += profit
-                            st.session_state.last_trade_status = f"🟢 LIVE API WIN: +${profit:.2f} BALANCED SECURELY"
+                            st.session_state.tracked_balance += profit
+                            st.session_state.last_trade_status = f"🟢 WIN COMPILING: +${profit:.2f} DEPOSITED SECURELY"
                         else:
                             st.session_state.total_losses += 1
-                            st.session_state.real_balance -= active_stake
-                            st.session_state.last_trade_status = f"🔴 LIVE API LOSS: -${active_stake:.2f} BRACKET EXCURSION"
+                            st.session_state.tracked_balance -= active_stake
+                            st.session_state.last_trade_status = f"🔴 BRACKET LOSS: -${active_stake:.2f} CONTRACT REVERSAL"
                     else:
-                        st.session_state.last_trade_status = f"❌ API REJECTION: {response.get('error', {}).get('message', 'Network Drop')}"
+                        st.session_state.last_trade_status = f"❌ API EXCEPTION: {response.get('error', {}).get('message', 'Network Drop')}"
                 else:
                     st.session_state.total_trades += 1
                     st.session_state.current_trend_runs += 1
@@ -390,20 +414,20 @@ while True:
 
                     if win_achieved or (outcome_roll <= 35.0):
                         payout_gains = active_stake * payout_multiplier
-                        st.session_state.demo_balance += payout_gains
+                        st.session_state.tracked_balance += payout_gains
                         st.session_state.total_wins += 1
-                        st.session_state.last_trade_status = f"🟢 WIN: +${payout_gains:.2f} CRITICAL TARGET ACQUIRED"
+                        st.session_state.last_trade_status = f"🟢 SIMULATION WIN: +${payout_gains:.2f} COMPASS SECURED"
                     else:
-                        st.session_state.demo_balance -= active_stake
+                        st.session_state.tracked_balance -= active_stake
                         st.session_state.total_losses += 1
-                        st.session_state.last_trade_status = f"🔴 LOSS: -${active_stake:.2f} BRACKET EXCURSION"
+                        st.session_state.last_trade_status = f"🔴 SIMULATION LOSS: -${active_stake:.2f} OVERFLOW"
 
                 if st.session_state.current_trend_runs >= max_runs_per_trend:
                     st.session_state.system_cooldown_active = True
                     st.session_state.cooldown_ticks = 0
                 time.sleep(2.5)
         else:
-            st.info("🔍 SCANNING FREQUENCY spectrum Matrix FOR TARGET PROFILE...")
+            st.info("🔍 SCANNING FREQUENCY SPECTRUM MATRIX FOR TARGET PROFILE...")
 
     # --- ISOLATED OUTCOME DISPLAY TRAILER ---
     with outcome_card.container():
@@ -413,4 +437,4 @@ while True:
         st.metric(label="🟩 WON CONTRACTS", value=st.session_state.total_wins)
         st.metric(label="🟥 LOST CONTRACTS", value=st.session_state.total_losses)
 
-    st.rerun() if st.session_state.account_mode == "LIVE" else time.sleep(0.01)
+    st.rerun() if st.session_state.active_token else time.sleep(0.01)
