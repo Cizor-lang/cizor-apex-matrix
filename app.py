@@ -3,22 +3,19 @@ import asyncio
 import websockets
 import json
 import ssl
-import threading
-import time
 import pandas as pd
 from datetime import datetime
 
 # --- SYSTEM HEADER CONFIGURATION ---
 st.set_page_config(page_title="CHITI Over/Under Bot", page_icon="⚡", layout="wide")
 
-# Micro Layout CSS Injection: Squeezes margins and sizes text for a tight dashboard layout
+# Micro Layout CSS Injection: Forces elements tightly together to maximize screener real estate
 st.markdown("""
     <style>
-    .block-container {padding-top: 0.5rem; padding-bottom: 0rem; padding-left: 1rem; padding-right: 1rem;}
+    .block-container {padding-top: 0.4rem; padding-bottom: 0rem; padding-left: 1rem; padding-right: 1rem;}
     h1, h2, h3 {margin-bottom: 0.1rem; margin-top: 0.1rem; font-size: 1.1rem !important;}
     div[data-testid="metric-container"] {background-color: #0d0d0d; padding: 0.15rem 0.4rem; border-radius: 4px; border: 1px solid #1a1a1a;}
     div[data-testid="stCodeBlock"] {margin-bottom: 0.1rem;}
-    div[data-styled-df] {font-size: 0.85rem;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -52,7 +49,7 @@ MARKETS = {
     "Volatility 100 (1s)": "1HZ100V"
 }
 
-# --- PERSISTENT STATE MANAGEMENT ARCHITECTURE ---
+# --- STATE LIFECYCLE RE-ENGINEERING ---
 state_defaults = {
     "running": False,
     "tracked_balance": 0.00,
@@ -60,7 +57,7 @@ state_defaults = {
     "total_wins": 0,
     "total_losses": 0,
     "history": [],
-    "current_action": "ENGINE INITIALIZED — TELEMETRY DISCONNECTED",
+    "current_action": "SYSTEM ONLINE — AWAITING RUN PARAMETERS",
     "live_quote": 0.00,
     "last_digit": 0,
     "market_scores": {m: 0.0 for m in MARKETS.keys()},
@@ -83,9 +80,6 @@ with st.sidebar:
     selected_market_name = st.selectbox("Active Stream Target", list(MARKETS.keys()))
     symbol = MARKETS[selected_market_name]
     
-    trade_type = st.radio("Manual Overwrite Mode", ["DIGITUNDER", "DIGITOVER"])
-    prediction = st.slider("Manual Target Prediction", 0, 9, 5)
-    
     st.markdown("---")
     st.markdown("**⚡ ALGORITHMIC ALLOCATIONS**")
     min_stake = st.number_input("System Minimum Stake ($)", min_value=0.35, value=0.35, step=0.05)
@@ -97,12 +91,14 @@ with st.sidebar:
         if st.button("▶️ START BOT", use_container_width=True):
             if token:
                 st.session_state.running = True
+                st.rerun()
             else:
                 st.error("Missing Token!")
     with col2:
         if st.button("🛑 STOP BOT", use_container_width=True):
             st.session_state.running = False
             st.session_state.current_action = "EMERGENCY COLD HALT EXECUTED"
+            st.rerun()
 
     if st.button("🧹 PURGE HUD STORAGE", use_container_width=True):
         st.session_state.total_trades = 0
@@ -112,85 +108,97 @@ with st.sidebar:
         st.session_state.current_action = "METRICS PURGED"
         st.rerun()
 
-# --- HIGH-VISIBILITY METRIC STRIP (MICRO DISPLAY) ---
-if st.session_state.running:
-    st.markdown("### STATUS: 🟢 CHITI SNIPER ACTIVE & RUNNING")
-else:
-    st.markdown("### STATUS: 🔴 ENGINE IDLE / SYSTEM PAUSED")
+# --- HIGH-SPEED ENGINE SURFACE (THE NATIVE FRAGMENT FRONTIER) ---
+@st.fragment
+def render_and_execute_engine():
+    # Structural Layout Render Block
+    if st.session_state.running:
+        st.markdown("### STATUS: 🟢 CHITI SNIPER ENGINE MATRIX ACTIVE & EXECULATING TRADES")
+    else:
+        st.markdown("### STATUS: 🔴 ENGINE IDLE / SYSTEM PAUSED")
 
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
-m2.metric("Total Executions", st.session_state.total_trades)
-m3.metric("Won Contracts", f"🟩 {st.session_state.total_wins}")
-m4.metric("Lost Contracts", f"🟥 {st.session_state.total_losses}")
-m5.metric("Live Ticker Feed", f"{st.session_state.live_quote:.2f} [{st.session_state.last_digit}]")
+    m1, m2, m3, m4, m5 = st.columns(5)
+    balance_slot = m1.empty()
+    trades_slot = m2.empty()
+    wins_slot = m3.empty()
+    losses_slot = m4.empty()
+    ticker_slot = m5.empty()
 
-st.info(f"**🤖 ACTIVE CONSOLE LOG:** {st.session_state.current_action}")
+    # Pre-populate fields immediately upon paint routine
+    balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
+    trades_slot.metric("Total Executions", st.session_state.total_trades)
+    wins_slot.metric("Won Contracts", f"🟩 {st.session_state.total_wins}")
+    losses_slot.metric("Lost Contracts", f"🟥 {st.session_state.total_losses}")
+    ticker_slot.metric("Live Ticker Feed", f"{st.session_state.live_quote:.2f} [{st.session_state.last_digit}]")
 
-# Split Layout Configuration (Left Matrix Analysis | Right Trade Ledger)
-layout_left, layout_right = st.columns([4, 5])
+    console_slot = st.empty()
+    console_slot.info(f"**🤖 ACTIVE CONSOLE LOG:** {st.session_state.current_action}")
 
-with layout_left:
-    st.markdown("### 📊 Distribution Spectrum")
+    layout_left, layout_right = st.columns([4, 5])
+    with layout_left:
+        st.markdown("### 📊 Distribution Spectrum")
+        spectrum_slot = st.empty()
+        st.markdown("### 🎯 Smart Market Scanner Recommendation")
+        screener_slot = st.empty()
+
+    with layout_right:
+        st.markdown("### 📜 Real-Time Ledger")
+        ledger_slot = st.empty()
+
+    # Dynamic fallback loops for initial interface arrays
     freq = st.session_state.digit_frequencies
     pointer = "".join([f"{' ▲ ' if i == st.session_state.last_digit else '   ':^5}" for i in range(10)])
     nums = "".join([f"{i:^5}" for i in range(10)])
     pcts = "".join([f"{f'{freq.get(i, 0.0):.0f}%':^5}" for i in range(10)])
-    st.code(f"{pointer}\n{nums}\n{pcts}")
-    
-    st.markdown("### 🎯 Smart Market Scanner Recommendation")
-    scores_df = pd.DataFrame([
-        {"Market Asset": k, "Signal Intensity": f"{v:.1f}%"} 
-        for k, v in sorted(st.session_state.market_scores.items(), key=lambda item: item[1], reverse=True)
-    ])
-    st.dataframe(scores_df, use_container_width=True, hide_index=True, height=180)
+    spectrum_slot.code(f"{pointer}\n{nums}\n{pcts}")
 
-with layout_right:
-    st.markdown("### 📜 Real-Time Ledger")
+    scores_df = pd.DataFrame([{"Market Asset": k, "Signal Intensity": f"{v:.1f}%"} for k, v in st.session_state.market_scores.items()])
+    screener_slot.dataframe(scores_df, use_container_width=True, hide_index=True, height=150)
+    
     if st.session_state.history:
-        df = pd.DataFrame(st.session_state.history).head(8)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(8), use_container_width=True, hide_index=True)
     else:
-        st.code("No trades logged in the current loop execution pipeline.")
+        ledger_slot.code("No trades logged in the current loop execution pipeline.")
 
-# --- ASYNC BACKGROUND EXECUTION ROUTINES ---
-async def trade_loop(app_id, token, symbol, risk_percentage, min_stake, selected_market_name):
-    url = f"wss://ws.derivws.com/websockets/v3?app_id={app_id}"
-    digit_window = []
-    prev_balance = 0.0
-    
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-    
-    async with websockets.connect(url, ssl=ssl_context) as ws:
-        # Step 1: Session Authorization
-        auth_req = {"authorize": token}
-        await ws.send(json.dumps(auth_req))
-        auth_res = await ws.recv()
-        auth_data = json.loads(auth_res)
+    # --- IN-LINE HIGH FREQUENCY ASYNC WORKER CORE ---
+    async def async_worker():
+        url = f"wss://ws.derivws.com/websockets/v3?app_id={app_id}"
+        digit_window = []
+        prev_balance = st.session_state.tracked_balance
         
-        if "error" in auth_data:
-            st.session_state.current_action = f"❌ API REJECTION: {auth_data['error']['message']}"
-            st.session_state.running = False
-            return
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        async with websockets.connect(url, ssl=ssl_context) as ws:
+            # Step 1: Secure Account Handshake Authentication
+            await ws.send(json.dumps({"authorize": token}))
+            auth_res = await ws.recv()
+            auth_data = json.loads(auth_res)
             
-        current_bal = float(auth_data["authorize"]["balance"])
-        st.session_state.tracked_balance = current_bal
-        prev_balance = current_bal
-        
-        # Step 2: Live Channels Registration (Ticks + Stream Account Balances)
-        await ws.send(json.dumps({"ticks": symbol}))
-        await ws.send(json.dumps({"balance": 1, "subscribe": 1}))
-        
-        st.session_state.current_action = "TELEMETRY LINK SECURED — DISPATCHING MATRIX RADAR"
-        
-        while st.session_state.running:
-            try:
+            if "error" in auth_data:
+                st.session_state.current_action = f"❌ API REJECTION: {auth_data['error']['message']}"
+                console_slot.error(f"**🤖 ACTIVE CONSOLE LOG:** {st.session_state.current_action}")
+                st.session_state.running = False
+                return
+                
+            current_bal = float(auth_data["authorize"]["balance"])
+            st.session_state.tracked_balance = current_bal
+            prev_balance = current_bal
+            balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
+            
+            # Step 2: Establish Direct Intercept Pipeline Streams
+            await ws.send(json.dumps({"ticks": symbol}))
+            await ws.send(json.dumps({"balance": 1, "subscribe": 1}))
+            
+            st.session_state.current_action = "TELEMETRY LINK SECURED — DISPATCHING MATRIX RADAR"
+            console_slot.info(f"**🤖 ACTIVE CONSOLE LOG:** {st.session_state.current_action}")
+            
+            while st.session_state.running:
                 res = await ws.recv()
                 data = json.loads(res)
                 
-                # Dynamic Balance Variant Node Tracker
+                # Account Sizing Balance Stream Node Detector
                 if "balance" in data:
                     realtime_bal = float(data["balance"]["balance"])
                     diff = realtime_bal - prev_balance
@@ -204,16 +212,23 @@ async def trade_loop(app_id, token, symbol, risk_percentage, min_stake, selected
                                 st.session_state.history[0]["Net P/L"] = f"+${diff:.2f}"
                         else:
                             st.session_state.total_losses += 1
-                            st.session_state.current_action = f"🟥 CONTRACT lost. Adjusting analytics parameters: -${abs(diff):.2f}"
+                            st.session_state.current_action = f"🟥 CONTRACT LOST. Adjusting parameters: -${abs(diff):.2f}"
                             if st.session_state.history:
                                 st.session_state.history[0]["Outcome"] = "LOSS"
                                 st.session_state.history[0]["Net P/L"] = f"-${abs(diff):.2f}"
                                 
                         st.session_state.tracked_balance = realtime_bal
                         prev_balance = realtime_bal
+                        
+                        balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
+                        wins_slot.metric("Won Contracts", f"🟩 {st.session_state.total_wins}")
+                        losses_slot.metric("Lost Contracts", f"🟥 {st.session_state.total_losses}")
+                        console_slot.info(f"**🤖 ACTIVE CONSOLE LOG:** {st.session_state.current_action}")
+                        if st.session_state.history:
+                            ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(8), use_container_width=True, hide_index=True)
                     continue
-                
-                # Zero-Delay Ticker Interceptor Block
+
+                # Live High-Frequency Tick Streams
                 if "tick" in data:
                     quote = float(data["tick"]["quote"])
                     quote_str = f"{quote:.2f}"
@@ -221,6 +236,9 @@ async def trade_loop(app_id, token, symbol, risk_percentage, min_stake, selected
                     
                     st.session_state.live_quote = quote
                     st.session_state.last_digit = digit
+                    
+                    ticker_slot.metric("Live Ticker Feed", f"{quote:.2f} [{digit}]")
+                    trades_slot.metric("Total Executions", st.session_state.total_trades)
                     
                     digit_window.append(digit)
                     if len(digit_window) > 40:
@@ -230,7 +248,7 @@ async def trade_loop(app_id, token, symbol, risk_percentage, min_stake, selected
                     freqs = {i: (digit_window.count(i) / total) * 100 for i in range(10)}
                     st.session_state.digit_frequencies = freqs
                     
-                    # Statistical Probabilities Aggregator
+                    # Statistical Signal Intensity Real-time Calculations
                     under_2 = freqs.get(0, 0) + freqs.get(1, 0)
                     under_3 = freqs.get(0, 0) + freqs.get(1, 0) + freqs.get(2, 0)
                     over_7 = freqs.get(8, 0) + freqs.get(9, 0)
@@ -238,15 +256,25 @@ async def trade_loop(app_id, token, symbol, risk_percentage, min_stake, selected
                     under_8 = sum([freqs.get(x, 0) for x in range(8)])
                     over_2 = sum([freqs.get(x, 0) for x in range(3, 10)])
                     
-                    # Store Scanner Scores
                     st.session_state.market_scores[selected_market_name] = max(under_2, under_3, over_7, over_8, under_8, over_2)
-
+                    
+                    # Update Spectrum and Screener Widgets Live
+                    p_str = "".join([f"{' ▲ ' if i == digit else '   ':^5}" for i in range(10)])
+                    n_str = "".join([f"{i:^5}" for i in range(10)])
+                    pct_str = "".join([f"{f'{freqs.get(i, 0.0):.0f}%':^5}" for i in range(10)])
+                    spectrum_slot.code(f"{p_str}\n{n_str}\n{pct_str}")
+                    
+                    sc_df = pd.DataFrame([
+                        {"Market Asset": k, "Signal Intensity": f"{v:.1f}%"} 
+                        for k, v in sorted(st.session_state.market_scores.items(), key=lambda item: item[1], reverse=True)
+                    ])
+                    screener_slot.dataframe(sc_df, use_container_width=True, hide_index=True, height=150)
+                    
                     target_type = None
                     target_pred = None
                     is_sure_trade = False
                     
-                    # --- CHITI CORE MATHEMATICAL SMART STRATEGY SELECTION ---
-                    # Tier 1 Setup: Sure Win Scenarios (Under 2,3,8 & Over 2,7,8)
+                    # --- CHITI CORE ALGORITHMIC CONFIRMATION RULES ---
                     if under_2 > 38.0 and digit in [0, 1]:
                         target_type, target_pred, is_sure_trade = "DIGITUNDER", 2, True
                     elif under_3 > 46.0 and digit in [0, 1, 2]:
@@ -255,16 +283,13 @@ async def trade_loop(app_id, token, symbol, risk_percentage, min_stake, selected
                         target_type, target_pred, is_sure_trade = "DIGITOVER", 8, True
                     elif over_7 > 38.0 and digit in [8, 9]:
                         target_type, target_pred, is_sure_trade = "DIGITOVER", 7, True
-                    
-                    # Tier 2 Setup: High Frequency Scalps (Grows Small Accounts Sensitively)
                     elif under_8 > 66.0 and digit in [5, 6, 7]:
                         target_type, target_pred, is_sure_trade = "DIGITUNDER", 8, False
                     elif over_2 > 66.0 and digit in [2, 3, 4]:
                         target_type, target_pred, is_sure_trade = "DIGITOVER", 2, False
 
-                    # Contract Placement Execution Pipeline
+                    # Dispatch Automated Contract Placement Orders
                     if target_type is not None:
-                        # Compound Safety Risk Sizing
                         calc_stake = st.session_state.tracked_balance * (risk_percentage / 100.0)
                         base_stake = max(min_stake, round(calc_stake, 2))
                         
@@ -272,8 +297,10 @@ async def trade_loop(app_id, token, symbol, risk_percentage, min_stake, selected
                             base_stake = round(base_stake * 1.5, 2)
                             st.session_state.current_action = f"🎯 SURE MATCH DETECTED! Compounding Stake Size to ${base_stake}"
                         else:
-                            st.session_state.current_action = f"⚡ FREQUENCY POSITION EXECUTED: Position Stake at ${base_stake}"
+                            st.session_state.current_action = f"⚡ FREQUENCY SCALPER PLACED: Position Stake at ${base_stake}"
                             
+                        console_slot.info(f"**🤖 ACTIVE CONSOLE LOG:** {st.session_state.current_action}")
+                        
                         order = {
                             "buy": 1,
                             "price": base_stake,
@@ -302,32 +329,13 @@ async def trade_loop(app_id, token, symbol, risk_percentage, min_stake, selected
                                 "Outcome": "PROCESSING...",
                                 "Net P/L": "$0.00"
                             })
-                            await asyncio.sleep(1.5)  # Safe buffer to allow contract tick clearance
-                            
-            except Exception as e:
-                st.session_state.current_action = f"⚠️ PIPELINE RE-ENTERING FLOW: {str(e)}"
-                await asyncio.sleep(1)
-                break
+                            trades_slot.metric("Total Executions", st.session_state.total_trades)
+                            ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(8), use_container_width=True, hide_index=True)
+                            await asyncio.sleep(1.2) # Rapid reset delay to secure max contract frequency
 
-# --- MULTI-THREAD DISPATCH HANDLER ---
-def run_async_loop_in_thread(app_id, token, symbol, risk_percentage, min_stake, selected_market_name):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(trade_loop(app_id, token, symbol, risk_percentage, min_stake, selected_market_name))
-    loop.close()
+    # Continuous loop executor loop block
+    if st.session_state.running:
+        asyncio.run(async_worker())
 
-if st.session_state.running:
-    active_threads = [t.name for t in threading.enumerate()]
-    if "CHITI_ENGINE_WORKER" not in active_threads:
-        worker = threading.Thread(
-            target=run_async_loop_in_thread, 
-            name="CHITI_ENGINE_WORKER",
-            args=(app_id, token, symbol, risk_percentage, min_stake, selected_market_name),
-            daemon=True
-        )
-        worker.start()
-
-# --- CONTINUOUS UI REFRESH PING PIN ---
-if st.session_state.running:
-    time.sleep(0.1)
-    st.rerun()
+# Execute the core engine surface rendering pipeline loop natively
+render_and_execute_engine()
