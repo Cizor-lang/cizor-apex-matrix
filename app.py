@@ -4,9 +4,10 @@ import ssl
 import websocket
 import pandas as pd
 import threading
+import time
 from datetime import datetime
 
-# --- SYSTEM HUD CONFIGURATION ---
+# --- SYSTEM HUD DESIGN SKIN ---
 st.set_page_config(page_title="CHITI Over/Under Bot", page_icon="⚡", layout="wide")
 
 st.markdown("""
@@ -18,7 +19,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SECURITY INTERCEPT GATEWAY ---
+# --- SECURITY GATEWAY INTERCEPT ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -44,7 +45,7 @@ MARKETS = {
     "Volatility 100 (1s)": "1HZ100V"
 }
 
-# --- LIFECYCLE MEMORY STATE ---
+# --- STATE MEMORY ARRAY ARCHITECTURE ---
 state_defaults = {
     "running": False,
     "tracked_balance": 0.00,
@@ -52,7 +53,7 @@ state_defaults = {
     "total_wins": 0,
     "total_losses": 0,
     "history": [],
-    "current_action": "ENGINE INITIALIZED — TELEMETRY ARMED",
+    "current_action": "ENGINE CORE STANDBY — READY TO HUNT",
     "live_quote": 0.00,
     "last_digit": 0,
     "digit_window": []
@@ -62,7 +63,7 @@ for key, val in state_defaults.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
-# --- INTERACTIVE CONTROL SIDEBAR ---
+# --- CONTROLS SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Core Parameters")
     st.markdown("**AUTHOR:** CIZOR THE BADDEST")
@@ -73,9 +74,9 @@ with st.sidebar:
     symbol = MARKETS[selected_market_name]
     
     st.markdown("---")
-    st.markdown("**⚡ RISK ALLOCATIONS**")
-    min_stake = st.number_input("System Minimum Stake ($)", min_value=0.35, value=0.50, step=0.05)
-    risk_percentage = st.slider("Dynamic Risk Profile (%)", min_value=1.0, max_value=20.0, value=5.0, step=0.5)
+    st.markdown("**⚡ CAPITAL RISK PROFILE**")
+    min_stake = st.number_input("Minimum Stake ($)", min_value=0.35, value=0.50, step=0.05)
+    risk_percentage = st.slider("Dynamic Risk Sizing (%)", min_value=1.0, max_value=20.0, value=5.0, step=0.5)
 
     st.markdown("---")
     col1, col2 = st.columns(2)
@@ -100,7 +101,7 @@ with st.sidebar:
         st.session_state.history.clear()
         st.rerun()
 
-# --- HIGH-VISIBILITY HUD CARD MATRIX ---
+# --- HIGH-VISIBILITY DASHBOARD DISPLAYS ---
 st.markdown(f"### CHITI SCALPER MATRIX: {'🟩 OPERATIONAL' if st.session_state.running else '🟥 PAUSED'}")
 
 m1, m2, m3, m4, m5 = st.columns(5)
@@ -121,14 +122,19 @@ with layout_right:
     st.markdown("### 📜 Real-Time Ledger")
     ledger_slot = st.empty()
 
-# --- THREADED ISOLATED BUY DISPATCHER ---
-def async_order_dispatch(url, token, base_stake, target_type, target_pred, symbol):
+# --- TARGET BROKER DISPATCH PIPELINE WORKER ---
+def execute_broker_trade(url, token, base_stake, target_type, target_pred, symbol):
     try:
-        # Create a dedicated, clean connection just for executing the purchase order
         dispatch_ws = websocket.WebSocket(sslopt={"cert_reqs": ssl.CERT_NONE})
         dispatch_ws.connect(url)
+        
+        # Authenticate contract lane
         dispatch_ws.send(json.dumps({"authorize": token}))
-        json.loads(dispatch_ws.recv()) # Clear handshake response
+        auth_raw = dispatch_ws.recv()
+        
+        # CORRECT DERIV PROPOSAL SPECIFICATION MAP
+        # For Over trades, contract_type MUST be "DIGITMATCH" and barrier sets prediction target
+        contract_string = "DIGITMATCH" if target_type == "DIGITOVER" else "DIGITUNDER"
         
         order = {
             "buy": 1,
@@ -136,14 +142,15 @@ def async_order_dispatch(url, token, base_stake, target_type, target_pred, symbo
             "parameters": {
                 "amount": base_stake,
                 "basis": "stake",
-                "contract_type": target_type,
+                "contract_type": contract_string,
                 "currency": "USD",
                 "duration": 1,
                 "duration_unit": "t",
-                "prediction": target_pred,
+                "barrier": str(target_pred),
                 "symbol": symbol
             }
         }
+        
         dispatch_ws.send(json.dumps(order))
         buy_res = json.loads(dispatch_ws.recv())
         dispatch_ws.close()
@@ -155,13 +162,16 @@ def async_order_dispatch(url, token, base_stake, target_type, target_pred, symbo
                 "Contract ID": buy_res["buy"]["contract_id"],
                 "Setup": f"{target_type} {target_pred}",
                 "Stake Value": f"${base_stake:.2f}",
-                "Outcome": "EXECUTED",
-                "Net P/L": "Pending Stream..."
+                "Outcome": "PROCESSING",
+                "Net P/L": "$0.00"
             })
-    except Exception:
-        pass
+        elif "error" in buy_res:
+            st.session_state.current_action = f"❌ Broker Rejected: {buy_res['error']['message']}"
+            
+    except Exception as e:
+        st.session_state.current_action = f"⚠️ Dispatch Exception: {str(e)}"
 
-# --- ACTIVE INTERCEPT CONTINUOUS PIPELINE ---
+# --- MAIN SYNCHRONOUS FEED RUNNER LOOP ---
 if st.session_state.running:
     url = f"wss://ws.derivws.com/websockets/v3?app_id={app_id}"
     ws = websocket.WebSocket(sslopt={"cert_reqs": ssl.CERT_NONE})
@@ -179,17 +189,17 @@ if st.session_state.running:
         st.session_state.tracked_balance = float(auth_res["authorize"]["balance"])
         balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
         
-        # Subscribe to Real-Time Tickers and continuous balance broadcasts
         ws.send(json.dumps({"ticks": symbol}))
         ws.send(json.dumps({"balance": 1, "subscribe": 1}))
         
         prev_balance = st.session_state.tracked_balance
+        tick_counting_buffer = 0
         
         while st.session_state.running:
             res = ws.recv()
             data = json.loads(res)
             
-            # Real-Time Account Balance Delta Tracker
+            # Balance Broadcast Monitoring
             if "balance" in data:
                 new_bal = float(data["balance"]["balance"])
                 diff = new_bal - prev_balance
@@ -215,7 +225,7 @@ if st.session_state.running:
                         ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(10), use_container_width=True, hide_index=True)
                 continue
 
-            # Real-Time Tick Stream Aggregator
+            # Live Feed Tracking Handler
             if "tick" in data:
                 quote = float(data["tick"]["quote"])
                 quote_str = f"{quote:.2f}"
@@ -223,70 +233,73 @@ if st.session_state.running:
                 
                 st.session_state.live_quote = quote
                 st.session_state.last_digit = digit
-                
                 ticker_slot.metric("Live Ticker Feed", f"{quote:.2f} [{digit}]")
                 
                 st.session_state.digit_window.append(digit)
                 if len(st.session_state.digit_window) > 15:
                     st.session_state.digit_window.pop(0)
-                    
+                
+                # Render historical chart updates
                 win_len = len(st.session_state.digit_window)
                 nums = "".join([f"{i:^5}" for i in range(10)])
                 counts = "".join([f"{st.session_state.digit_window.count(i):^5}" for i in range(10)])
                 spectrum_slot.code(f"Digits:     {nums}\nOccurrences:{counts}\nTotal Samples: {win_len}/15")
                 
-                # --- STRATEGY MAP: UNDER 7/8 AND OVER 2/3 ---
+                # --- HUMAN SCALPER EMULATION ARCHITECTURE ---
+                # Accumulate a small window buffer (e.g. 4 ticks) before performing professional evaluation
+                tick_counting_buffer += 1
+                if tick_counting_buffer < 4:
+                    strategy_log_slot.info(f"**Engine Status:** ⏳ Human Analyser: Buffering tick velocity patterns ({tick_counting_buffer}/4)...")
+                    continue
+                
+                # Reset counter and begin deep targeted execution scan
+                tick_counting_buffer = 0
                 target_type = None
                 target_pred = None
-                reason = "Scanning matrix..."
+                reason = "Evaluating spectrum variations..."
 
-                # Match every single digit directly to maximize win probability and frequency
-                if digit in [0, 1]:
+                # TARGET SCALPING WINDOW FOCUS: UNDER 7, 8 & OVER 2, 3
+                if digit in [0, 1, 2]:
                     target_type, target_pred = "DIGITUNDER", 8
-                    reason = f"🎯 TICK [{digit}]: Maximizing probability safely. Executing UNDER 8 position."
-                elif digit == 2:
+                    reason = f"🎯 ANALYSER: Low digit [{digit}] confirmed. Entering optimized UNDER 8 contract."
+                elif digit == 3:
                     target_type, target_pred = "DIGITUNDER", 7
-                    reason = f"⚡ TICK [{digit}]: Frequency scalp target hit. Executing UNDER 7 position."
-                elif digit in [3, 4, 5, 6]:
-                    # Flat neutral middle zone split: alternate execution paths instantly to force trade volume
-                    if digit % 2 == 0:
-                        target_type, target_pred = "DIGITUNDER", 8
-                        reason = f"⚡ TICK [{digit}]: Neutral Scalp split. Forcing high frequency UNDER 8 position."
-                    else:
-                        target_type, target_pred = "DIGITOVER", 2
-                        reason = f"⚡ TICK [{digit}]: Neutral Scalp split. Forcing high frequency OVER 2 position."
-                elif digit == 7:
+                    reason = f"⚡ ANALYSER: Support digit [{digit}] confirmed. Entering highly frequent UNDER 7 contract."
+                elif digit in [4, 5]:
+                    reason = f"⏳ ANALYSER: Mid-zone bracket [{digit}]. Re-evaluating subsequent ticks to avoid choppy data."
+                elif digit == 6:
                     target_type, target_pred = "DIGITOVER", 2
-                    reason = f"⚡ TICK [{digit}]: Frequency scalp target hit. Executing OVER 2 position."
-                elif digit in [8, 9]:
+                    reason = f"⚡ ANALYSER: Resistance digit [{digit}] confirmed. Entering highly frequent OVER 2 contract."
+                elif digit in [7, 8, 9]:
                     target_type, target_pred = "DIGITOVER", 3
-                    reason = f"🎯 TICK [{digit}]: Maximizing probability safely. Executing OVER 3 position."
+                    reason = f"🎯 ANALYSER: High digit [{digit}] confirmed. Entering optimized OVER 3 contract."
 
-                strategy_log_slot.info(f"**Engine Brain:** {reason}")
+                strategy_log_slot.info(f"**Engine Status:** {reason} | **Console Alert:** {st.session_state.current_action}")
 
-                # Offload order execution to the thread pool so the tick counter never freezes
+                # Fire Threaded Order Delivery
                 if target_type is not None:
                     calc_stake = st.session_state.tracked_balance * (risk_percentage / 100.0)
                     base_stake = max(min_stake, round(calc_stake, 2))
                     
-                    # Off-thread Dispatch execution 
                     t = threading.Thread(
-                        target=async_order_dispatch,
+                        target=execute_broker_trade,
                         args=(url, token, base_stake, target_type, target_pred, symbol),
                         daemon=True
                     )
                     t.start()
                     
-                    # Update counts immediately
+                    # Force safety sleep to block overlaps and act like a real human cooling down
+                    time.sleep(2.0)
+                    
                     trades_slot.metric("Total Executions", st.session_state.total_trades)
                     if st.session_state.history:
                         ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(10), use_container_width=True, hide_index=True)
 
     except Exception as e:
-        st.session_state.current_action = f"Pipeline reset: {str(e)}"
+        st.session_state.current_action = f"Network Resetting: {str(e)}"
         st.session_state.running = False
         st.rerun()
 else:
-    strategy_log_slot.warning("Engine stopped. Press ▶️ START BOT to activate high-frequency scalper pipeline feeds.")
+    strategy_log_slot.warning("Engine stopped. Press ▶️ START BOT to activate high-frequency human-emulated trading.")
     if st.session_state.history:
         ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(10), use_container_width=True, hide_index=True)
