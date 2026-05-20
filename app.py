@@ -32,14 +32,12 @@ if not st.session_state.authenticated:
             )
     st.stop()
 
-# --- MARKET MAP TO DERIV SYSTEM SYMBOLS (CLEANED DIRECT SITE PORTFOLIO) ---
+# --- MARKET MAP TO DERIV SYSTEM SYMBOLS (STRICT RESTORED CORRESPONDENCE) ---
 MARKET_MAP = {
     "Volatility 10 (1s) Index": "1HZ10V",
     "Volatility 25 (1s) Index": "1HZ25V",
-    "Volatility 30 (1s) Index": "1HZ30V",
     "Volatility 50 (1s) Index": "1HZ50V",
     "Volatility 75 (1s) Index": "1HZ75V",
-    "Volatility 90 (1s) Index": "1HZ90V",
     "Volatility 100 (1s) Index": "1HZ100V"
 }
 MARKETS_1S = list(MARKET_MAP.keys())
