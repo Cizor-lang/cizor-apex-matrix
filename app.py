@@ -5,27 +5,52 @@ import json
 import pandas as pd
 from datetime import datetime
 
-# --- CONFIGURATION & SESSION STATE ---
-st.set_page_config(page_title="CHITI Over/Under Bot", page_layout="wide")
-st.title("🧬 CHITI Engine - Digit Over/Under")
+# --- SYSTEM HEADER CONFIGURATION (CORRECTED PARAMETER) ---
+st.set_page_config(page_title="CHITI Over/Under Bot", page_icon="⚡", layout="wide")
 
+# --- INITIAL SECURITY GATEWAY ---
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.title("🔒 CIZOR APEX INTERCEPT GATEWAY")
+    st.markdown("---")
+    
+    input_passkey = st.text_input("ENTER ONE-TIME OPERATIONAL AUTHENTICATION PASSKEY:", type="password")
+    release_btn = st.button("🚀 RELEASE SNIPER ENGINE")
+    
+    if release_btn:
+        if input_passkey == "2PRK9HH#":
+            st.session_state.authenticated = True
+            st.success("✅ PASSWORD VALIDATED. ACCESS GRANTED.")
+            st.rerun()
+        else:
+            st.error("❌ ACCESS DENIED: INVALID SYSTEM PASSKEY.")
+            st.markdown(
+                "> **RECOMMENDATION:** Please reach out to **AUTHOR 'CIZOR THE BADDEST' FOR ASSISTANCE**."
+            )
+    st.stop()
+
+# --- INITIAL STATE MANAGEMENT ---
 if "running" not in st.session_state:
     st.session_state.running = False
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# --- SIDEBAR CONTROLS ---
+# --- INTERACTIVE DASHBOARD SIDEBAR CONTROLS ---
 with st.sidebar:
     st.header("⚙️ Core Parameters")
-    app_id = st.text_input("App ID", value="1089") # Default demo app_id
+    st.markdown("**AUTHOR:** CIZOR THE BADDEST")
+    
+    app_id = st.text_input("App ID", value="1089")
     token = st.text_input("API Token", type="password")
     
-    symbol = st.selectbox("Asset Index", ["R_10", "R_25", "R_50", "R_75", "R_100"])
+    symbol = st.selectbox("Asset Index", ["1HZ10V", "1HZ25V", "1HZ50V", "1HZ75V", "1HZ100V"], 
+                          help="Deriv Volatility Indices (1s Feed)")
     trade_type = st.radio("Trade Condition", ["DIGITUNDER", "DIGITOVER"])
     prediction = st.slider("Digit Prediction Target", 0, 9, 5)
     
     stake = st.number_input("Stake ($)", min_value=0.35, value=1.0, step=0.5)
-    duration = st.integer_input("Duration (Ticks)", min_value=1, max_value=1, value=1) # O/U standard is 1 tick
 
     col1, col2 = st.columns(2)
     with col1:
@@ -42,17 +67,17 @@ with st.sidebar:
 m1, m2, m3, m4 = st.columns(4)
 tick_placeholder = m1.empty()
 last_digit_placeholder = m2.empty()
-profit_placeholder = m3.empty()
+balance_placeholder = m3.empty()
 status_placeholder = m4.empty()
 
 table_placeholder = st.empty()
 
-# --- CORE TRADING CORE ENGINE ---
+# --- CORE TRADING ENGINE LOOP ---
 async def trade_loop():
     url = f"wss://ws.derivws.com/websockets/v3?app_id={app_id}"
     
     async with websockets.connect(url) as ws:
-        # 1. Authenticate immediately
+        # Authenticate immediately
         auth_req = {"authorize": token}
         await ws.send(json.dumps(auth_req))
         auth_res = await ws.recv()
@@ -63,14 +88,12 @@ async def trade_loop():
             st.session_state.running = False
             return
             
-        status_placeholder.metric("Engine Status", "Connected & Authorized")
+        status_placeholder.metric("Engine Status", "Connected")
+        balance_placeholder.metric("Account Balance", f"${float(auth_data['authorize']['balance']):,.2f}")
 
-        # 2. Subscribe to streaming ticks
+        # Subscribe to streaming updates
         tick_req = {"ticks": symbol}
         await ws.send(json.dumps(tick_req))
-        
-        # Balance tracker for profit calculation
-        initial_balance = float(auth_data["authorize"]["balance"])
         
         while st.session_state.running:
             try:
@@ -79,13 +102,13 @@ async def trade_loop():
                 
                 if "tick" in data:
                     tick_val = data["tick"]["quote"]
-                    tick_str = str(tick_val)
+                    tick_str = f"{tick_val:.2f}"
                     last_digit = int(tick_str[-1])
                     
                     tick_placeholder.metric("Live Quote", tick_val)
                     last_digit_placeholder.metric("Last Digit", last_digit)
                     
-                    # 3. Simple execution rules logic
+                    # Execution logic block
                     should_buy = False
                     if trade_type == "DIGITOVER" and last_digit > prediction:
                         should_buy = True
@@ -101,7 +124,7 @@ async def trade_loop():
                                 "basis": "stake",
                                 "contract_type": trade_type,
                                 "currency": "USD",
-                                "duration": duration,
+                                "duration": 1,
                                 "duration_unit": "t",
                                 "prediction": prediction,
                                 "symbol": symbol
@@ -110,26 +133,22 @@ async def trade_loop():
                         await ws.send(json.dumps(contract_req))
                         
                 elif "buy" in data:
-                    # Capture contract purchase details safely
-                    p_id = data["buy"]["contract_id"]
-                    st.session_state.history.insert(0, {
-                        "Timestamp": datetime.now().strftime("%H:%M:%S"),
-                        "Contract ID": p_id,
-                        "Action": "Order Placed",
-                        "Stake": stake
-                    })
-                    
-                elif "proposal_open_contract" in data:
-                    # Captures closures to dynamically update metrics
-                    poc = data["proposal_open_contract"]
-                    if poc.get("is_expired"):
-                        profit = float(poc.get("profit", 0))
-                        # Quick update to dashboard history logs
-                        if st.session_state.history:
-                            st.session_state.history[0]["Result"] = "WIN" if profit > 0 else "LOSS"
-                            st.session_state.history[0]["Profit/Loss"] = profit
-
-                # Keep interface clean and update layout frame
+                    if "error" in data:
+                        st.sidebar.error(f"Execution Error: {data['error']['message']}")
+                    else:
+                        p_id = data["buy"]["contract_id"]
+                        new_bal = data["buy"]["balance_after"]
+                        balance_placeholder.metric("Account Balance", f"${float(new_bal):,.2f}")
+                        
+                        st.session_state.history.insert(0, {
+                            "Timestamp": datetime.now().strftime("%H:%M:%S"),
+                            "Contract ID": p_id,
+                            "Symbol": symbol,
+                            "Type": trade_type,
+                            "Stake": f"${stake:.2f}"
+                        })
+                
+                # Render clean execution summary table
                 if st.session_state.history:
                     df = pd.DataFrame(st.session_state.history).head(15)
                     table_placeholder.dataframe(df, use_container_width=True)
@@ -138,7 +157,7 @@ async def trade_loop():
                 st.sidebar.error(f"Loop Exception: {str(e)}")
                 break
 
-# --- STREAMLIT SYNC TO ASYNC RUNNER ---
+# --- RUN LOOP GATE ---
 if st.session_state.running:
     asyncio.run(trade_loop())
 else:
