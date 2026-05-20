@@ -32,12 +32,15 @@ if not st.session_state.authenticated:
             )
     st.stop()
 
-# --- MARKET MAP TO DERIV SYSTEM SYMBOLS (STRICT RESTORED CORRESPONDENCE) ---
+# --- MARKET MAP TO DERIV SYSTEM SYMBOLS (UPGRADED EXTENDED 2026 SPECTRUM) ---
 MARKET_MAP = {
     "Volatility 10 (1s) Index": "1HZ10V",
+    "Volatility 15 (1s) Index": "1HZ15V",
     "Volatility 25 (1s) Index": "1HZ25V",
+    "Volatility 30 (1s) Index": "1HZ30V",
     "Volatility 50 (1s) Index": "1HZ50V",
     "Volatility 75 (1s) Index": "1HZ75V",
+    "Volatility 90 (1s) Index": "1HZ90V",
     "Volatility 100 (1s) Index": "1HZ100V"
 }
 MARKETS_1S = list(MARKET_MAP.keys())
@@ -348,13 +351,14 @@ while True:
             f"====================================================================================="
         )
 
-    # --- REAL-TIME SPECTRUM DISPLAY ---
+    # --- REAL-TIME SPECTRUM DISPLAY (NOW HIGHLIGHTING CURRENT TICKING ASSET) ---
     with spectrum_visualizer.container():
         col_w = 7
         pointer_line = "".join([f"{'▲' if d == live_tick_digit else '':^{col_w}}" for d in range(10)])
         matrix_digits = "".join([f"{d:^{col_w}}" for d in range(10)])
         percent_line = "".join([f"{f'{frequencies[d]:.0f}%':^{col_w}}" for d in range(10)])
         
+        # CLEAR DISPLAY LABELS FOR ACTIVE INDEX AND SERVER TICK COUNTER
         st.markdown(f"### 🚨 CURRENT ACTIVE TICK STREAM: `{st.session_state.current_market.upper()}`")
         st.markdown(f"**Market Lifetime:** `[ {st.session_state.market_ticks_count} / {st.session_state.market_lock_duration} ticks ]` before next rotate loop.")
         st.code(f"{pointer_line}\n{matrix_digits}\n{percent_line}")
