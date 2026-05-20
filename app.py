@@ -5,7 +5,7 @@ import websocket
 import pandas as pd
 from datetime import datetime
 
-# --- SYSTEM HEADER CONFIGURATION ---
+# --- SYSTEM DASHBOARD SKIN CONFIGURATION ---
 st.set_page_config(page_title="CHITI Over/Under Bot", page_icon="⚡", layout="wide")
 
 st.markdown("""
@@ -17,7 +17,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SECURITY GATEWAY ---
+# --- SECURITY GATEWAY INTERCEPT ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -34,7 +34,7 @@ if not st.session_state.authenticated:
             st.error("❌ INVALID SYSTEM PASSKEY.")
     st.stop()
 
-# --- MARKETS ---
+# --- TARGET INDEX REGISTER ---
 MARKETS = {
     "Volatility 10 (1s)": "1HZ10V",
     "Volatility 25 (1s)": "1HZ25V",
@@ -43,7 +43,7 @@ MARKETS = {
     "Volatility 100 (1s)": "1HZ100V"
 }
 
-# --- LIFECYCLE STATE ---
+# --- PERSISTENT LIFECYCLE ARRAY STATE ---
 state_defaults = {
     "running": False,
     "tracked_balance": 0.00,
@@ -51,18 +51,17 @@ state_defaults = {
     "total_wins": 0,
     "total_losses": 0,
     "history": [],
-    "current_action": "ENGINE ONLINE — READY",
+    "current_action": "ENGINE INITIALIZED — TELEMETRY ARMED",
     "live_quote": 0.00,
     "last_digit": 0,
-    "digit_window": [],
-    "market_scores": {m: 0.0 for m in MARKETS.keys()}
+    "digit_window": []
 }
 
 for key, val in state_defaults.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
-# --- SIDEBAR CONTROL PANEL ---
+# --- INTERACTIVE DASHBOARD SIDEBAR CONTROLS ---
 with st.sidebar:
     st.header("⚙️ Core Parameters")
     st.markdown("**AUTHOR:** CIZOR THE BADDEST")
@@ -73,9 +72,9 @@ with st.sidebar:
     symbol = MARKETS[selected_market_name]
     
     st.markdown("---")
-    st.markdown("**⚡ RISK CONTROLS**")
+    st.markdown("**⚡ DYNAMIC CAPITAL ALLOCATIONS**")
     min_stake = st.number_input("System Minimum Stake ($)", min_value=0.35, value=0.50, step=0.05)
-    risk_percentage = st.slider("Dynamic Risk Profile (%)", min_value=1.0, max_value=15.0, value=5.0, step=0.5)
+    risk_percentage = st.slider("Dynamic Risk Profile (%)", min_value=1.0, max_value=20.0, value=5.0, step=0.5)
 
     st.markdown("---")
     col1, col2 = st.columns(2)
@@ -90,46 +89,46 @@ with st.sidebar:
     with col2:
         if st.button("🛑 STOP BOT", use_container_width=True):
             st.session_state.running = False
-            st.session_state.current_action = "ENGINE SHUTDOWN EXECUTED"
+            st.session_state.current_action = "ENGINE SYSTEM PAUSED BY USER"
             st.rerun()
 
-    if st.button("扫 PURGE DATA", use_container_width=True):
+    if st.button("🧹 PURGE METRICS STORAGE", use_container_width=True):
         st.session_state.total_trades = 0
         st.session_state.total_wins = 0
         st.session_state.total_losses = 0
         st.session_state.history.clear()
         st.rerun()
 
-# --- HIGH-VISIBILITY DASHBOARD HUD ---
-st.markdown(f"### SYSTEM HUD: {'🟩 RUNNING' if st.session_state.running else '🟥 STOPPED'}")
+# --- HIGH-VISIBILITY HUD CARD MATRIX ---
+st.markdown(f"### CHITI HIGH-FREQUENCY MONITOR: {'🟩 OPERATIONAL' if st.session_state.running else '🟥 PAUSED'}")
 
 m1, m2, m3, m4, m5 = st.columns(5)
-balance_slot = m1.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f}")
+balance_slot = m1.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
 trades_slot = m2.metric("Total Executions", st.session_state.total_trades)
 wins_slot = m3.metric("Won Contracts", f"🟩 {st.session_state.total_wins}")
 losses_slot = m4.metric("Lost Contracts", f"🟥 {st.session_state.total_losses}")
 ticker_slot = m5.metric("Live Ticket Feed", f"{st.session_state.live_quote:.2f} [{st.session_state.last_digit}]")
 
-# Core Strategy Scanner Window
-st.markdown("### 🎯 Live Mathematical Evaluation & Strategy Scanner")
+# Core Strategy Scanner Console Window
+st.markdown("### 🎯 Real-Time Strategy Evaluation Scanner")
 strategy_log_slot = st.empty()
 
 layout_left, layout_right = st.columns([4, 5])
 with layout_left:
-    st.markdown("### 📊 Last 15 Digits Analysis")
+    st.markdown("### 📊 Distribution Spectrum (Last 15 Ticks)")
     spectrum_slot = st.empty()
 with layout_right:
-    st.markdown("### 📜 Real-Time Execution Ledger")
+    st.markdown("### 📜 Real-Time Ledger")
     ledger_slot = st.empty()
 
-# --- SYNCHRONOUS BLOCK-FREE WEBSOCKET RUNNER ---
+# --- ACTIVE CORE EXECUTOR LOOP ---
 if st.session_state.running:
     url = f"wss://ws.derivws.com/websockets/v3?app_id={app_id}"
     ws = websocket.WebSocket(sslopt={"cert_reqs": ssl.CERT_NONE})
     
     try:
         ws.connect(url)
-        # 1. Authorize
+        # Session Authorization Handshake
         ws.send(json.dumps({"authorize": token}))
         auth_res = json.loads(ws.recv())
         
@@ -139,20 +138,19 @@ if st.session_state.running:
             st.rerun()
             
         st.session_state.tracked_balance = float(auth_res["authorize"]["balance"])
-        balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f}")
+        balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
         
-        # 2. Subscribe to Feeds
+        # Subscribe to Real-time Market Tickers + Balance Stream Updates
         ws.send(json.dumps({"ticks": symbol}))
         ws.send(json.dumps({"balance": 1, "subscribe": 1}))
         
         prev_balance = st.session_state.tracked_balance
         
-        # Active blocking bypass loop inside a simple rendering container
         while st.session_state.running:
             res = ws.recv()
             data = json.loads(res)
             
-            # Intercept account balance notifications instantly
+            # Channel A: Live Balance Account Interceptor Node
             if "balance" in data:
                 new_bal = float(data["balance"]["balance"])
                 diff = new_bal - prev_balance
@@ -160,25 +158,25 @@ if st.session_state.running:
                     if diff > 0:
                         st.session_state.total_wins += 1
                         if st.session_state.history:
-                            st.session_state.history[0]["Outcome"] = "WIN"
+                            st.session_state.history[0]["Outcome"] = "🟢 WIN"
                             st.session_state.history[0]["Net P/L"] = f"+${diff:.2f}"
                     else:
                         st.session_state.total_losses += 1
                         if st.session_state.history:
-                            st.session_state.history[0]["Outcome"] = "LOSS"
+                            st.session_state.history[0]["Outcome"] = "🔴 LOSS"
                             st.session_state.history[0]["Net P/L"] = f"-${abs(diff):.2f}"
                     
                     st.session_state.tracked_balance = new_bal
                     prev_balance = new_bal
                     
-                    balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f}")
+                    balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
                     wins_slot.metric("Won Contracts", f"🟩 {st.session_state.total_wins}")
                     losses_slot.metric("Lost Contracts", f"🟥 {st.session_state.total_losses}")
                     if st.session_state.history:
                         ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(10), use_container_width=True, hide_index=True)
                 continue
 
-            # Process live ticks
+            # Channel B: Zero-Delay Ticket Interception Processor
             if "tick" in data:
                 quote = float(data["tick"]["quote"])
                 quote_str = f"{quote:.2f}"
@@ -189,47 +187,53 @@ if st.session_state.running:
                 
                 ticker_slot.metric("Live Ticker Feed", f"{quote:.2f} [{digit}]")
                 
-                # Append to math window
                 st.session_state.digit_window.append(digit)
                 if len(st.session_state.digit_window) > 15:
                     st.session_state.digit_window.pop(0)
                     
-                # Render frequency visual display
+                # Update visual statistics block
                 win_len = len(st.session_state.digit_window)
                 nums = "".join([f"{i:^5}" for i in range(10)])
                 counts = "".join([f"{st.session_state.digit_window.count(i):^5}" for i in range(10)])
                 spectrum_slot.code(f"Digits:     {nums}\nOccurrences:{counts}\nTotal Samples: {win_len}/15")
                 
-                # High frequency calculation parameters
-                last_3 = st.session_state.digit_window[-3:] if win_len >= 3 else st.session_state.digit_window
-                
-                # TARGET STRATEGY EVALUATION BLOCK
+                # --- HYPER-AGGRESSIVE FIXED STRATEGY SCALPER CONFIG ---
                 target_type = None
                 target_pred = None
-                reason = "Scanning for matching patterns..."
-                
-                # Strategy logic checks
-                if all(x < 5 for x in last_3) and len(last_3) == 3:
+                reason = "Evaluating spectrum anomalies..."
+                is_sure_trade = False
+
+                # Evaluation Focus Blocks: Under 7,8 & Over 2,3
+                if digit in [0, 1, 2]:
+                    # Extreme Lows -> Safe Under Targets OR High Certainty Over Targets
                     target_type, target_pred = "DIGITUNDER", 8
-                    reason = "🔥 HIGH FREQUENCY CONFIRMED: Last 3 ticks were small numbers (Under 5). Buying UNDER 8."
-                elif all(x > 4 for x in last_3) and len(last_3) == 3:
+                    is_sure_trade = True
+                    reason = f"🎯 HIGH INTENSITY OVERRULE: Digit isolated at [{digit}]. Placing high-accuracy UNDER 8 contract position."
+                elif digit in [3, 4]:
+                    # Moderate Lows -> Safe Under Targets
+                    target_type, target_pred = "DIGITUNDER", 7
+                    reason = f"⚡ FREQUENCY SCALPER HIT: Digit isolated at [{digit}]. Placing frequent UNDER 7 contract position."
+                elif digit in [5, 6]:
+                    # Moderate Highs -> Safe Over Targets
                     target_type, target_pred = "DIGITOVER", 2
-                    reason = "🔥 HIGH FREQUENCY CONFIRMED: Last 3 ticks were large numbers (Over 4). Buying OVER 2."
-                elif digit in [0, 1, 2]:
-                    target_type, target_pred = "DIGITUNDER", 3
-                    reason = f"⚡ SCALPER HIT: Tick isolated at [{digit}]. Taking highly probable UNDER 3."
+                    reason = f"⚡ FREQUENCY SCALPER HIT: Digit isolated at [{digit}]. Placing frequent OVER 2 contract position."
                 elif digit in [7, 8, 9]:
-                    target_type, target_pred = "DIGITOVER", 7
-                    reason = f"⚡ SCALPER HIT: Tick isolated at [{digit}]. Taking highly probable OVER 7."
-                else:
-                    reason = f"⏳ Neutral Zone: Digit [{digit}] does not hit high probability limits. Skipping tick to protect balance."
+                    # Extreme Highs -> Safe Over Targets OR High Certainty Under Targets
+                    target_type, target_pred = "DIGITOVER", 3
+                    is_sure_trade = True
+                    reason = f"🎯 HIGH INTENSITY OVERRULE: Digit isolated at [{digit}]. Placing high-accuracy OVER 3 contract position."
 
                 strategy_log_slot.info(f"**Engine Brain:** {reason}")
 
-                # Send execution request immediately if a target maps out
+                # Immediate Request Dispatch Pipeline Execution Block
                 if target_type is not None:
+                    # Risk Capital Compounding Sizer Formula
                     calc_stake = st.session_state.tracked_balance * (risk_percentage / 100.0)
                     base_stake = max(min_stake, round(calc_stake, 2))
+                    
+                    # Boost allocation parameters sensitively on ultra-high-certainty setups
+                    if is_sure_trade:
+                        base_stake = round(base_stake * 1.3, 2)
                     
                     order = {
                         "buy": 1,
@@ -254,18 +258,18 @@ if st.session_state.running:
                             "Timestamp": datetime.now().strftime("%H:%M:%S"),
                             "Contract ID": buy_res["buy"]["contract_id"],
                             "Setup": f"{target_type} {target_pred}",
-                            "Stake": f"${base_stake:.2f}",
-                            "Outcome": "PROCESSING...",
+                            "Stake Value": f"${base_stake:.2f}",
+                            "Outcome": "EXECUTING...",
                             "Net P/L": "$0.00"
                         })
                         trades_slot.metric("Total Executions", st.session_state.total_trades)
                         ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(10), use_container_width=True, hide_index=True)
                         
     except Exception as e:
-        st.session_state.current_action = f"Disconnected/Error: {str(e)}"
+        st.session_state.current_action = f"Disconnected/Network Resetting: {str(e)}"
         st.session_state.running = False
         st.rerun()
 else:
-    strategy_log_slot.warning("Engine Engine stopped. Click ▶️ START BOT to activate trading feeds.")
+    strategy_log_slot.warning("Engine stopped. Press ▶️ START BOT to activate high-frequency scalper pipeline feeds.")
     if st.session_state.history:
         ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(10), use_container_width=True, hide_index=True)
