@@ -7,7 +7,7 @@ import threading
 import time
 from datetime import datetime
 
-# --- FIXED SYSTEM DASHBOARD DESIGN SKIN ---
+# --- DASHBOARD UI CONFIGURATION ---
 st.set_page_config(page_title="CHITI Over/Under Bot", page_icon="⚡", layout="wide")
 
 st.markdown("""
@@ -19,7 +19,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SECURITY INTERCEPT GATEWAY ---
+# --- CAPTIVE GATEWAY AUTHENTICATION ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -36,7 +36,7 @@ if not st.session_state.authenticated:
             st.error("❌ INVALID SYSTEM PASSKEY.")
     st.stop()
 
-# --- MARKET REGISTER ---
+# --- MARKET MAP ---
 MARKETS = {
     "Volatility 10 (1s)": "1HZ10V",
     "Volatility 25 (1s)": "1HZ25V",
@@ -45,27 +45,28 @@ MARKETS = {
     "Volatility 100 (1s)": "1HZ100V"
 }
 
-# --- STATE MEMORY ARRAY ARCHITECTURE ---
+# --- PERSISTENT MEMORY STATES ---
 state_defaults = {
     "running": False,
     "tracked_balance": 0.00,
     "total_wins": 0,
     "total_losses": 0,
+    "consecutive_losses": 0,
     "history": [],
-    "current_action": "ENGINE CORE STANDBY — READY TO HUNT",
+    "current_action": "ENGINE INITIALIZED — STANDBY PROFILE",
     "live_quote": 0.00,
     "last_digit": 0,
-    "digit_window": []
+    "digit_window": [],
+    "cooldown_until": 0
 }
 
 for key, val in state_defaults.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
-# --- DYNAMIC SYNCHRONIZED EXECUTION MATH ---
 total_executions = st.session_state.total_wins + st.session_state.total_losses
 
-# --- SIDEBAR CONTROLS ---
+# --- SIDEBAR CONTROL CONTROL ---
 with st.sidebar:
     st.header("⚙️ Core Parameters")
     st.markdown("**AUTHOR:** CIZOR THE BADDEST")
@@ -76,9 +77,9 @@ with st.sidebar:
     symbol = MARKETS[selected_market_name]
     
     st.markdown("---")
-    st.markdown("**⚡ CAPITAL RISK PROFILE**")
-    min_stake = st.number_input("Minimum Stake ($)", min_value=0.35, value=0.50, step=0.05)
-    risk_percentage = st.slider("Dynamic Risk Sizing (%)", min_value=1.0, max_value=20.0, value=3.0, step=0.5)
+    st.markdown("**⚡ RISK ALLOCATIONS**")
+    min_stake = st.number_input("System Minimum Stake ($)", min_value=0.35, value=0.50, step=0.05)
+    risk_percentage = st.slider("Dynamic Risk Profile (%)", min_value=1.0, max_value=20.0, value=2.0, step=0.5)
 
     st.markdown("---")
     col1, col2 = st.columns(2)
@@ -87,6 +88,8 @@ with st.sidebar:
             if token:
                 st.session_state.running = True
                 st.session_state.digit_window = []
+                st.session_state.consecutive_losses = 0
+                st.session_state.cooldown_until = 0
                 st.rerun()
             else:
                 st.error("Enter API Token!")
@@ -96,14 +99,15 @@ with st.sidebar:
             st.session_state.current_action = "ENGINE SYSTEM PAUSED BY USER"
             st.rerun()
 
-if st.button("🧹 PURGE METRICS STORAGE", use_container_width=True):
-    st.session_state.total_wins = 0
-    st.session_state.total_losses = 0
-    st.session_state.history.clear()
-    st.rerun()
+    if st.button("🧹 PURGE METRICS STORAGE", use_container_width=True):
+        st.session_state.total_wins = 0
+        st.session_state.total_losses = 0
+        st.session_state.consecutive_losses = 0
+        st.session_state.history.clear()
+        st.rerun()
 
-# --- HIGH-VISIBILITY HUD CARD MATRIX ---
-st.markdown(f"### CHITI SCALPER MATRIX: {'🟩 OPERATIONAL' if st.session_state.running else '🟥 PAUSED'}")
+# --- HIGH-VISIBILITY HUD DASHBOARD ---
+st.markdown(f"### CHITI CORE SNAER MATRIX HUD: {'🟩 RUNNING' if st.session_state.running else '🟥 PAUSED'}")
 
 m1, m2, m3, m4, m5 = st.columns(5)
 balance_slot = m1.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
@@ -123,8 +127,8 @@ with layout_right:
     st.markdown("### 📜 Real-Time Ledger")
     ledger_slot = st.empty()
 
-# --- BROKER PROPOSAL PIPELINE WORKER ---
-def execute_broker_trade(url, token, base_stake, target_type, target_pred, symbol):
+# --- ISOLATED THREAD PACKET DISPATCHER ---
+def fire_synchronized_contract(url, token, base_stake, target_type, target_pred, symbol):
     try:
         dispatch_ws = websocket.WebSocket(sslopt={"cert_reqs": ssl.CERT_NONE})
         dispatch_ws.connect(url)
@@ -133,17 +137,15 @@ def execute_broker_trade(url, token, base_stake, target_type, target_pred, symbo
         
         if "error" in auth_raw:
             return
-            
-        # Target parameter normalization schema
-        contract_string = "DIGITMATCH" if target_type == "DIGITOVER" else "DIGITUNDER"
-        
+
+        # FIXED ENUMERATION PAYLOAD MAPPINGS FOR DERIV API BACKEND
         order = {
             "buy": 1,
-            "price": base_stake,
+            "price": float(base_stake),
             "parameters": {
-                "amount": base_stake,
+                "amount": float(base_stake),
                 "basis": "stake",
-                "contract_type": contract_string,
+                "contract_type": target_type,  # Passed directly as DIGITOVER or DIGITUNDER
                 "currency": "USD",
                 "duration": 1,
                 "duration_unit": "t",
@@ -157,18 +159,19 @@ def execute_broker_trade(url, token, base_stake, target_type, target_pred, symbo
         dispatch_ws.close()
         
         if "buy" in buy_res:
+            timestamp_str = datetime.now().strftime("%H:%M:%S")
             st.session_state.history.insert(0, {
-                "Timestamp": datetime.now().strftime("%H:%M:%S"),
+                "Timestamp": timestamp_str,
                 "Contract ID": buy_res["buy"]["contract_id"],
-                "Setup": f"{target_type} {target_pred}",
-                "Stake Value": f"${base_stake:.2f}",
-                "Outcome": "PROCESSING",
+                "Setup Strategy": f"{target_type} {target_pred}",
+                "Stake Profile": f"${base_stake:.2f}",
+                "Outcome": "PROCESSING...",
                 "Net P/L": "$0.00"
             })
     except Exception:
         pass
 
-# --- ACTIVE SNIPER LOOP ---
+# --- MAIN LOOP RUNNER ---
 if st.session_state.running:
     url = f"wss://ws.derivws.com/websockets/v3?app_id={app_id}"
     ws = websocket.WebSocket(sslopt={"cert_reqs": ssl.CERT_NONE})
@@ -200,14 +203,21 @@ if st.session_state.running:
                 if abs(diff) > 0.001:
                     if diff > 0:
                         st.session_state.total_wins += 1
+                        st.session_state.consecutive_losses = 0  # Clear loss tracking on win
                         if st.session_state.history:
                             st.session_state.history[0]["Outcome"] = "🟢 WIN"
                             st.session_state.history[0]["Net P/L"] = f"+${diff:.2f}"
                     else:
                         st.session_state.total_losses += 1
+                        st.session_state.consecutive_losses += 1
                         if st.session_state.history:
                             st.session_state.history[0]["Outcome"] = "🔴 LOSS"
                             st.session_state.history[0]["Net P/L"] = f"-${abs(diff):.2f}"
+                        
+                        # Guard rails: If encountering a streak of losses, flag a circuit break cooldown
+                        if st.session_state.consecutive_losses >= 2:
+                            st.session_state.cooldown_until = time.time() + 15.0
+                            st.session_state.consecutive_losses = 0
                     
                     st.session_state.tracked_balance = new_bal
                     prev_balance = new_bal
@@ -238,57 +248,55 @@ if st.session_state.running:
                 counts = "".join([f"{st.session_state.digit_window.count(i):^5}" for i in range(10)])
                 spectrum_slot.code(f"Digits:     {nums}\nOccurrences:{counts}\nTotal Samples: {win_len}/15")
                 
-                # --- HUMAN ANALYSIS PHASE (TRAILING VOLATILITY FILTER) ---
-                if len(st.session_state.digit_window) < 5:
-                    strategy_log_slot.info("⚙️ Human Analyser: Gathering initial tick signature samples...")
+                # --- CIRCUIT BREAKER DELAY ---
+                if time.time() < st.session_state.cooldown_until:
+                    rem = int(st.session_state.cooldown_until - time.time())
+                    strategy_log_slot.warning(f"🛑 LOSS CIRCUIT BREAKER ENGAGED: Stepping away from market chaos for {rem}s...")
+                    continue
+
+                if len(st.session_state.digit_window) < 4:
+                    strategy_log_slot.info("⚙️ Human Analyser: Gathering stream fingerprint patterns...")
                     continue
                 
-                # Extract the last 5 immediate sequential ticks to analyze momentum strings
-                recent_ticks = st.session_state.digit_window[-5:]
+                # Extract trailing context markers to evaluate cluster velocity
+                recent_ticks = st.session_state.digit_window[-4:]
                 
                 target_type = None
                 target_pred = None
-                reason = "Searching stable structural anomalies..."
+                reason = "Scanning digit distribution spectrum ratios..."
 
-                # HUMAN TREND COUNTER-FILTER BLOCK
-                # Avoid entry if the market is clustering consecutive high or low numbers (Trend Trap prevention)
-                low_cluster_count = sum(1 for t in recent_ticks if t in [0, 1, 2])
-                high_cluster_count = sum(1 for t in recent_ticks if t in [7, 8, 9])
-
-                if digit in [0, 1] and low_cluster_count < 3:
+                # HUMAN PATTERN MATRIX — WAITS FOR CONFIRMED MULTI-TICK WAVE TRENDS
+                # Over 2/3 and Under 7/8 Strategy Array Focus
+                if recent_ticks[-1] in [0, 1] and recent_ticks[-2] in [0, 1, 2]:
                     target_type, target_pred = "DIGITUNDER", 8
-                    reason = f"🎯 SNIPER: Safe low digit [{digit}] confirmed. Striking precise UNDER 8 contract."
-                elif digit == 2 and low_cluster_count < 3:
+                    reason = f"🎯 SNIPER ANALYSIS: True Low sequence confirmed {recent_ticks[-2:]}. Executing verified UNDER 8."
+                elif recent_ticks[-1] == 2 and recent_ticks[-2] <= 3:
                     target_type, target_pred = "DIGITUNDER", 7
-                    reason = f"⚡ SNIPER: Frequency support hit [{digit}]. Striking UNDER 7 contract."
-                elif digit == 7 and high_cluster_count < 3:
+                    reason = f"⚡ SNIPER ANALYSIS: Support cluster identified. Executing verified UNDER 7."
+                elif recent_ticks[-1] == 7 and recent_ticks[-2] >= 6:
                     target_type, target_pred = "DIGITOVER", 2
-                    reason = f"⚡ SNIPER: Frequency resistance hit [{digit}]. Striking OVER 2 contract."
-                elif digit in [8, 9] and high_cluster_count < 3:
+                    reason = f"⚡ SNIPER ANALYSIS: Resistance cluster identified. Executing verified OVER 2."
+                elif recent_ticks[-1] in [8, 9] and recent_ticks[-2] in [7, 8, 9]:
                     target_type, target_pred = "DIGITOVER", 3
-                    reason = f"🎯 SNIPER: Safe high digit [{digit}] confirmed. Striking precise OVER 3 contract."
+                    reason = f"🎯 SNIPER ANALYSIS: True High sequence confirmed {recent_ticks[-2:]}. Executing verified OVER 3."
                 else:
-                    reason = f"⏳ ANALYSER PAUSE: Cluster detected (Lows: {low_cluster_count}/5, Highs: {high_cluster_count}/5). Locking entries until choppy wave passes."
+                    reason = f"⏳ HUMAN SCANNER: Stream pattern ({recent_ticks}) contains noisy data. Safely holding entries until conditions align."
 
-                strategy_log_slot.info(f"**Engine Brain:** {reason}")
+                strategy_log_slot.info(f"**Engine Status:** {reason}")
 
                 if target_type is not None:
                     calc_stake = st.session_state.tracked_balance * (risk_percentage / 100.0)
                     base_stake = max(min_stake, round(calc_stake, 2))
                     
                     t = threading.Thread(
-                        target=execute_broker_trade,
+                        target=fire_synchronized_contract,
                         args=(url, token, base_stake, target_type, target_pred, symbol),
                         daemon=True
                     )
                     t.start()
                     
-                    # Human cool-down delay to let the market structural tick fluctuate naturally
+                    # Cool-down to wait for contract settlement safely
                     time.sleep(2.5)
-                    
-                    trades_slot.metric("Total Executions", st.session_state.total_wins + st.session_state.total_losses)
-                    if st.session_state.history:
-                        ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(10), use_container_width=True, hide_index=True)
 
     except Exception as e:
         st.session_state.running = False
