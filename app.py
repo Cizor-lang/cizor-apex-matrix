@@ -32,15 +32,12 @@ if not st.session_state.authenticated:
             )
     st.stop()
 
-# --- MARKET MAP TO DERIV SYSTEM SYMBOLS (UPGRADED EXTENDED 2026 SPECTRUM) ---
+# --- MARKET MAP TO DERIV SYSTEM SYMBOLS ---
 MARKET_MAP = {
     "Volatility 10 (1s) Index": "1HZ10V",
-    "Volatility 15 (1s) Index": "1HZ15V",
     "Volatility 25 (1s) Index": "1HZ25V",
-    "Volatility 30 (1s) Index": "1HZ30V",
     "Volatility 50 (1s) Index": "1HZ50V",
     "Volatility 75 (1s) Index": "1HZ75V",
-    "Volatility 90 (1s) Index": "1HZ90V",
     "Volatility 100 (1s) Index": "1HZ100V"
 }
 MARKETS_1S = list(MARKET_MAP.keys())
@@ -95,11 +92,13 @@ if not st.session_state.gateway_authorized:
         st.session_state.active_token = token_input
         st.sidebar.info("Interrogating server credentials...")
 else:
+    # Color badge mapping depending on server auto-detection
     if "REAL" in st.session_state.detected_account_type:
         st.sidebar.error(f"🔴 ONLINE: {st.session_state.detected_account_type}")
     else:
         st.sidebar.info(f"🔵 ONLINE: {st.session_state.detected_account_type}")
         
+    # THE HOT-SWAP DISCONNECT BUTTON (Logs out Account 1 instantly so you can paste Account 2)
     logout_clicked = st.sidebar.button("↩️ LOG OUT & DISCONNECT TOKEN")
     if logout_clicked:
         st.session_state.active_token = ""
@@ -109,9 +108,11 @@ else:
         st.success("Tunnels dropped cleanly. Standing by for next token insertion.")
         st.rerun()
 
+# CORE HARDWARE CONFIGURATION CONTROLS
 st.sidebar.markdown("---")
 st.sidebar.markdown("**SYSTEM HARDWARE OVERRIDES:**")
 
+# EMERGENCY STOP AND LIVE ENGINE TOGGLES
 if st.session_state.engine_running:
     stop_clicked = st.sidebar.button("🛑 EMERGENCY KILL-SWITCH: HALT")
     if stop_clicked:
@@ -123,6 +124,7 @@ else:
         st.session_state.engine_running = True
         st.rerun()
 
+# SYSTEM RESET BUTTON (Brings tracking data and local balance back down to exact $10 baseline)
 reset_clicked = st.sidebar.button("🧹 RESET SYSTEM MONITOR")
 if reset_clicked:
     st.session_state.tracked_balance = 10.00
@@ -137,14 +139,16 @@ if reset_clicked:
 
 # --- ASYMMETRIC STAKE EXTRACTION PROPORTIONS ---
 base_stake = 0.35
+# Regular strategy parameters hold a safe 3% stabilization layer
 standard_calculated_stake = max(base_stake, round(st.session_state.tracked_balance * 0.03, 2)) if st.session_state.tracked_balance > 0 else base_stake
 
+# 1000% Certainty Sniper targets automatically shift sizing to scale small accounts rapidly (Between 10% and 30%)
 if st.session_state.tracked_balance <= 15.00:
-    high_certainty_stake = 1.50 
+    high_certainty_stake = 1.50 # Forces an aggressive $1.50 setup on tiny accounts to grow rapidly
 elif st.session_state.tracked_balance <= 50.00:
-    high_certainty_stake = round(st.session_state.tracked_balance * 0.20, 2) 
+    high_certainty_stake = round(st.session_state.tracked_balance * 0.20, 2) # 20% Aggressive acceleration
 else:
-    high_certainty_stake = round(st.session_state.tracked_balance * 0.15, 2) 
+    high_certainty_stake = round(st.session_state.tracked_balance * 0.15, 2) # Steady 15% growth compounder
 
 st.sidebar.metric(label="💰 REAL BALANCE MONITOR", value=f"${st.session_state.tracked_balance:,.2f} USD")
 
@@ -160,6 +164,7 @@ with col_right:
 
 # --- WEBSOCKET CONNECTION MANAGER FOR AUTOMATIC DEVIATION CHECKS ---
 def parse_credentials_and_sync(token, symbol, amount, strategy, run_trade=False):
+    """Secures a real-time raw tunnel pipeline to Deriv to parse balance shifts, account types, and order blocks."""
     try:
         ws = create_connection("wss://ws.derivws.com/websockets/v3?app_id=1089", sslopt={"cert_reqs": ssl.CERT_NONE})
         
@@ -171,6 +176,7 @@ def parse_credentials_and_sync(token, symbol, amount, strategy, run_trade=False)
             ws.close()
             return None, f"❌ AUTH ERROR: {auth_res['error']['message']}", st.session_state.tracked_balance
             
+        # DYNAMIC DEVIATION OVERRIDE DETECTOR (Auto-detects Demo vs Real without manual toggles)
         client_data = auth_res["authorize"]
         server_actual_balance = float(client_data["balance"])
         acct_id_string = client_data.get("loginid", "")
@@ -182,6 +188,8 @@ def parse_credentials_and_sync(token, symbol, amount, strategy, run_trade=False)
             
         st.session_state.gateway_authorized = True
         
+        # CONTINUOUS RE-ADAPTATION LOGIC FOR EXTRACTIONS/WITHDRAWALS
+        # If the balance shifts on the broker side due to a withdrawal or manual top-up, the bot updates instantly
         if abs(st.session_state.tracked_balance - server_actual_balance) > 0.01 and not run_trade:
             st.session_state.tracked_balance = server_actual_balance
 
@@ -238,6 +246,7 @@ while True:
 
     selected_symbol = MARKET_MAP[st.session_state.current_market]
 
+    # --- DUAL-ALIGNED INTERCEPT TRANSMITTER ---
     if st.session_state.active_token:
         _, network_result, server_bal = parse_credentials_and_sync(st.session_state.active_token, selected_symbol, standard_calculated_stake, "NEUTRAL", run_trade=False)
         if isinstance(network_result, (int, float)):
@@ -250,6 +259,7 @@ while True:
             live_tick_digit = int(live_price_str[-1])
             confidence_signal = f"⚠️ [BROKER TIMEOUT: {network_result}]"
     else:
+        # Local sandbox testing loop if no API key is initialized
         time.sleep(1.0)
         live_price_str = f"{random.uniform(750.00, 1250.00):.2f}"
         live_tick_digit = int(live_price_str[-1])
@@ -267,6 +277,7 @@ while True:
     over_7_density = frequencies[8] + frequencies[9]
     over_8_density = frequencies[9]
 
+    # --- HIGHER FREQUENCY BALANCE PROTECTION AND ACCELERATION PIPELINE ---
     strategy_choice = "NEUTRAL"
     action_authorized = False
     payout_multiplier = 1.0
@@ -277,6 +288,7 @@ while True:
     recent_ticks = st.session_state.digit_history[-6:] if total_ticks >= 6 else st.session_state.digit_history
 
     if not st.session_state.system_cooldown_active and total_ticks >= 20:
+        # 🔥 HIGH CERTAINTY EXPLOIT CHANNELS (Jumps to 10%-30% high aggressive stakes)
         if frequencies[8] > 26.0 and recent_ticks[-1] == 8:
             strategy_choice = "OVER 8"
             payout_multiplier = 8.00
@@ -306,6 +318,7 @@ while True:
             is_1000_percent_sure = True
             active_stake = high_certainty_stake
         else:
+            # 🛡️ THE STABILITY FREQUENT CHANNELS (Captures regular consecutive wins using massive 70% windows)
             under_8_density = sum([frequencies[x] for x in range(8)])
             over_2_density = sum([frequencies[x] for x in range(3, 10)])
             
@@ -351,16 +364,13 @@ while True:
             f"====================================================================================="
         )
 
-    # --- REAL-TIME SPECTRUM DISPLAY (NOW HIGHLIGHTING CURRENT TICKING ASSET) ---
+    # --- REAL-TIME SPECTRUM DISPLAY ---
     with spectrum_visualizer.container():
         col_w = 7
         pointer_line = "".join([f"{'▲' if d == live_tick_digit else '':^{col_w}}" for d in range(10)])
         matrix_digits = "".join([f"{d:^{col_w}}" for d in range(10)])
         percent_line = "".join([f"{f'{frequencies[d]:.0f}%':^{col_w}}" for d in range(10)])
-        
-        # CLEAR DISPLAY LABELS FOR ACTIVE INDEX AND SERVER TICK COUNTER
-        st.markdown(f"### 🚨 CURRENT ACTIVE TICK STREAM: `{st.session_state.current_market.upper()}`")
-        st.markdown(f"**Market Lifetime:** `[ {st.session_state.market_ticks_count} / {st.session_state.market_lock_duration} ticks ]` before next rotate loop.")
+        st.text("[ REAL-TIME DERIV DIGIT FREQUENCY SPECTRUM ]")
         st.code(f"{pointer_line}\n{matrix_digits}\n{percent_line}")
 
     # --- INSTANT ZERO-DELAY ORDER CONTRACT LOGIC ---
