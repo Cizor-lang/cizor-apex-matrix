@@ -1,14 +1,25 @@
 import streamlit as st
-import asyncio
-import websockets
 import json
+import ssl
+import time
 import pandas as pd
+import threading
 from datetime import datetime
+from websocket import create_connection
 
-# --- SYSTEM HEADER CONFIGURATION ---
-st.set_page_config(page_title="CHITI Over/Under Bot", page_icon="⚡", layout="wide")
+# --- SYSTEM CONFIGURATION ---
+st.set_page_config(page_title="CHITI Sniper Engine v2", page_icon="⚡", layout="wide")
 
-# --- INITIAL SECURITY GATEWAY ---
+# Custom Micro CSS injection to optimize screen real estate and font readability
+st.markdown("""
+    <style>
+    .block-container {padding-top: 1rem; padding-bottom: 0rem; padding-left: 2rem; padding-right: 2rem;}
+    h1, h2, h3 {margin-bottom: 0.2rem; margin-top: 0.2rem;}
+    div[data-testid="metric-container"] {background-color: #111; padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid #222;}
+    </style>
+""", unsafe_style_encoded=True)
+
+# --- PASSKEY SECURITY GATEWAY ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -16,8 +27,8 @@ if not st.session_state.authenticated:
     st.title("🔒 CIZOR APEX INTERCEPT GATEWAY")
     st.markdown("---")
     
-    input_passkey = st.text_input("ENTER ONE-TIME OPERATIONAL AUTHENTICATION PASSKEY:", type="password")
-    release_btn = st.button("🚀 RELEASE SNIPER ENGINE")
+    input_passkey = st.text_input("ENTER OPERATIONAL PASSKEY:", type="password")
+    release_btn = st.button("🚀 ENGAGE CORE SYSTEM")
     
     if release_btn:
         if input_passkey == "2PRK9HH#":
@@ -26,52 +37,53 @@ if not st.session_state.authenticated:
             st.rerun()
         else:
             st.error("❌ ACCESS DENIED: INVALID SYSTEM PASSKEY.")
-            st.markdown(
-                "> **RECOMMENDATION:** Please reach out to **AUTHOR 'CIZOR THE BADDEST' FOR ASSISTANCE**."
-            )
+            st.markdown("> **RECOMMENDATION:** Please reach out to **AUTHOR 'CIZOR THE BADDEST' FOR ASSISTANCE**.")
     st.stop()
 
-# --- ENGINE SESSION MATRIX ---
-MARKET_MAP = {
-    "Volatility 10 (1s) Index": "1HZ10V",
-    "Volatility 25 (1s) Index": "1HZ25V",
-    "Volatility 50 (1s) Index": "1HZ50V",
-    "Volatility 75 (1s) Index": "1HZ75V",
-    "Volatility 100 (1s) Index": "1HZ100V"
+# --- SUPPORTED ASSET FEED MAP ---
+MARKETS = {
+    "Volatility 10 (1s)": "1HZ10V",
+    "Volatility 25 (1s)": "1HZ25V",
+    "Volatility 50 (1s)": "1HZ50V",
+    "Volatility 75 (1s)": "1HZ75V",
+    "Volatility 100 (1s)": "1HZ100V"
 }
 
-if "running" not in st.session_state:
-    st.session_state.running = False
-if "history" not in st.session_state:
-    st.session_state.history = []
-if "tracked_balance" not in st.session_state:
-    st.session_state.tracked_balance = 0.00
-if "total_trades" not in st.session_state:
-    st.session_state.total_trades = 0
-if "total_wins" not in st.session_state:
-    st.session_state.total_wins = 0
-if "total_losses" not in st.session_state:
-    st.session_state.total_losses = 0
-if "digit_history" not in st.session_state:
-    st.session_state.digit_history = []
-if "current_action" not in st.session_state:
-    st.session_state.current_action = "SYSTEM STANDBY — AWAITING ARMED RUN SIGNALS"
+# --- INITIAL STATE MATRIX ---
+state_defaults = {
+    "running": False,
+    "tracked_balance": 0.00,
+    "total_trades": 0,
+    "total_wins": 0,
+    "total_losses": 0,
+    "history": [],
+    "current_action": "SYSTEM INITIALIZED — RECONNAISSANCE ARMED",
+    "live_quote": 0.00,
+    "last_digit": 0,
+    "market_scores": {m: 0.0 for m in MARKETS.keys()},
+    "digit_frequencies": {i: 0.0 for i in range(10)}
+}
 
-# --- INTERACTIVE DASHBOARD SIDEBAR CONTROLS ---
+for key, val in state_defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
+
+# --- INTERACTIVE CONTROL PANEL ---
 with st.sidebar:
-    st.header("⚙️ Core Parameters")
-    st.markdown("**AUTHOR:** CIZOR THE BADDEST")
+    st.header("⚙️ Sniper Configuration")
+    st.markdown("**ENGINE AUTHOR:** CIZOR THE BADDEST")
+    st.markdown("---")
     
-    app_id = st.text_input("App ID", value="1089")
+    app_id = st.text_input("Deriv App ID", value="1089")
     token = st.text_input("API Token", type="password")
     
-    selected_market_name = st.selectbox("Asset Index", list(MARKET_MAP.keys()), help="Deriv Volatility Indices (1s Feed)")
-    symbol = MARKET_MAP[selected_market_name]
+    selected_market_name = st.selectbox("Active Stream Target", list(MARKETS.keys()))
+    symbol = MARKETS[selected_market_name]
     
     st.markdown("---")
-    st.markdown("**⚡ RISK & AUTOMATION RULES**")
-    min_stake = st.number_input("Minimum Allowed Stake ($)", min_value=0.35, value=0.35, step=0.05)
-    risk_percentage = st.slider("Auto-Compound Account Risk (%)", min_value=1.0, max_value=20.0, value=3.0, step=0.5)
+    st.markdown("**⚡ ALGORITHMIC ALLOCATIONS**")
+    min_stake = st.number_input("System Minimum Stake ($)", min_value=0.35, value=0.35, step=0.05)
+    risk_percentage = st.slider("Dynamic Risk Profile (%)", min_value=1.0, max_value=10.0, value=3.0, step=0.5)
 
     st.markdown("---")
     col1, col2 = st.columns(2)
@@ -79,228 +91,230 @@ with st.sidebar:
         if st.button("▶️ START BOT", use_container_width=True):
             if token:
                 st.session_state.running = True
-                st.session_state.current_action = "INITIALIZING BALANCED TUNNELS..."
             else:
-                st.error("Missing Token!")
+                st.error("API Token Required")
     with col2:
         if st.button("🛑 STOP BOT", use_container_width=True):
             st.session_state.running = False
-            st.session_state.current_action = "EMERGENCY COOLDOWN ENGAGED BY USER"
+            st.session_state.current_action = "EMERGENCY HALT COMPLETED"
 
-    if st.button("🧹 PURGE HUD CACHE", use_container_width=True):
+    if st.button("🧹 PURGE METRICS CACHE", use_container_width=True):
         st.session_state.total_trades = 0
         st.session_state.total_wins = 0
         st.session_state.total_losses = 0
         st.session_state.history.clear()
-        st.session_state.digit_history.clear()
+        st.session_state.current_action = "METRICS PURGED"
         st.rerun()
 
-# --- LIVE HUD METRICS INTERFACE ---
-grid1, grid2, grid3, grid4 = st.columns(4)
-status_placeholder = grid1.empty()
-balance_placeholder = grid2.empty()
-wins_losses_placeholder = grid3.empty()
-live_digit_placeholder = grid4.empty()
-
-# Real-Time Operational State Banner
-st.info(f"**🤖 CURRENT ENGINE ACTIVITY:** {st.session_state.current_action}")
-
-col_left, col_right = st.columns([1, 2])
-with col_left:
-    st.markdown("### 📊 Spectrum Matrix")
-    spectrum_placeholder = st.empty()
-    st.markdown("---")
-    st.markdown("### 🎯 Best Market Navigator")
-    screener_placeholder = st.empty()
-
-with col_right:
-    st.markdown("### 📜 Real-Time Ledger")
-    table_placeholder = st.empty()
-
-# --- CONCURRENT TRANSACTION & TICK PROCESSOR ---
-async def trade_loop():
-    url = f"wss://ws.derivws.com/websockets/v3?app_id={app_id}"
+# --- CONTINUOUS THREADED WORKER ENGINE ---
+def websocket_worker(app_id, token, symbol, risk_percentage, min_stake, selected_market_name):
+    ws_url = f"wss://ws.derivws.com/websockets/v3?app_id={app_id}"
+    digit_window = []
+    prev_balance = 0.0
     
-    async with websockets.connect(url) as ws:
-        # Step 1: Immediate Authentication Verification
-        auth_req = {"authorize": token}
-        await ws.send(json.dumps(auth_req))
-        auth_res = await ws.recv()
-        auth_data = json.loads(auth_res)
+    try:
+        ws = create_connection(ws_url, sslopt={"cert_reqs": ssl.CERT_NONE})
         
+        # Immediate Account Authentication
+        ws.send(json.dumps({"authorize": token}))
+        auth_data = json.loads(ws.recv())
         if "error" in auth_data:
-            st.session_state.current_action = f"❌ AUTHENTICATION REFUSED: {auth_data['error']['message']}"
+            st.session_state.current_action = f"❌ API REJECTION: {auth_data['error']['message']}"
             st.session_state.running = False
             return
             
-        # Register balance layers cleanly
-        st.session_state.tracked_balance = float(auth_data["authorize"]["balance"])
-        prev_balance = st.session_state.tracked_balance
+        current_bal = float(auth_data["authorize"]["balance"])
+        st.session_state.tracked_balance = current_bal
+        prev_balance = current_bal
         
-        # Step 2: Establish Parallel Streams
-        await ws.send(json.dumps({"ticks": symbol}))
-        await ws.send(json.dumps({"balance": 1, "subscribe": 1}))
+        # Synchronized Data Streams Subscriptions (Ticks + Continuous Account Balances)
+        ws.send(json.dumps({"ticks": symbol}))
+        ws.send(json.dumps({"balance": 1, "subscribe": 1}))
         
-        status_placeholder.metric("Engine Status", "🟢 TRADING ACTIVE")
-        balance_placeholder.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
-        
-        st.session_state.current_action = "CHANNELS LOCKED. CALCULATING MARKET STRUCTURAL IMBALANCES..."
+        st.session_state.current_action = "TELEMETRY LINK SECURED — MONITORING FLOWS"
         
         while st.session_state.running:
-            try:
-                # Read stream without dropping background state frames
-                res = await ws.recv()
-                data = json.loads(res)
+            raw_msg = ws.recv()
+            data = json.loads(raw_msg)
+            
+            # 1. Real-Time Balance Interceptor
+            if "balance" in data:
+                realtime_bal = float(data["balance"]["balance"])
+                diff = realtime_bal - prev_balance
                 
-                # --- TASK 1: ACCURATE REAL-TIME BALANCE STREAM INTERCEPTOR ---
-                if "balance" in data:
-                    realtime_bal = float(data["balance"]["balance"])
-                    balance_change = realtime_bal - prev_balance
+                if abs(diff) > 0.001:
+                    if diff > 0:
+                        st.session_state.total_wins += 1
+                        st.session_state.current_action = f"🟩 CONTRACT WON! Payout Balance Credited: +${diff:.2f}"
+                        if st.session_state.history:
+                            st.session_state.history[0]["Outcome"] = "WIN"
+                            st.session_state.history[0]["Net P/L"] = f"+${diff:.2f}"
+                    else:
+                        st.session_state.total_losses += 1
+                        st.session_state.current_action = f"🟥 CONTRACT LOST. Margin Deducted: -${abs(diff):.2f}"
+                        if st.session_state.history:
+                            st.session_state.history[0]["Outcome"] = "LOSS"
+                            st.session_state.history[0]["Net P/L"] = f"-${abs(diff):.2f}"
+                            
+                    st.session_state.tracked_balance = realtime_bal
+                    prev_balance = realtime_bal
+                continue
+                
+            # 2. Continuous Tick Processing Node
+            if "tick" in data:
+                quote = float(data["tick"]["quote"])
+                quote_str = f"{quote:.2f}"
+                digit = int(quote_str[-1])
+                
+                st.session_state.live_quote = quote
+                st.session_state.last_digit = digit
+                
+                digit_window.append(digit)
+                if len(digit_window) > 40:
+                    digit_window.pop(0)
                     
-                    if abs(balance_change) > 0.001:
-                        if balance_change > 0:
-                            st.session_state.total_wins += 1
-                            st.session_state.current_action = f"🟩 SNIPER TARGET SECURED! Profit Deposited: +${balance_change:.2f}"
-                            if st.session_state.history:
-                                st.session_state.history[0]["Outcome"] = "🟢 WIN"
-                                st.session_state.history[0]["Net P/L"] = f"+${balance_change:.2f}"
-                        else:
-                            st.session_state.total_losses += 1
-                            st.session_state.current_action = f"🟥 BARRIER HIT. Account Margin Deducted: -${abs(balance_change):.2f}"
-                            if st.session_state.history:
-                                st.session_state.history[0]["Outcome"] = "🔴 LOSS"
-                                st.session_state.history[0]["Net P/L"] = f"-${abs(balance_change):.2f}"
+                total = len(digit_window)
+                freqs = {i: (digit_window.count(i) / total) * 100 for i in range(10)}
+                st.session_state.digit_frequencies = freqs
+                
+                # --- STRATEGY PROFILE SCORING ---
+                under_2 = freqs[0] + freqs[1]
+                under_3 = freqs[0] + freqs[1] + freqs[2]
+                over_7 = freqs[8] + freqs[9]
+                over_8 = freqs[9]
+                under_8 = sum([freqs[x] for x in range(8)])
+                over_2 = sum([freqs[x] for x in range(3, 10)])
+                
+                # Assign scanning strength value to find out performance spikes
+                st.session_state.market_scores[selected_market_name] = max(under_2, under_3, over_7, over_8, under_8, over_2)
+
+                trade_type = None
+                prediction = None
+                is_sure_trade = False
+                
+                # --- MULTI-CONDITION EXECUTION FILTER ---
+                # A. 1000% Sure High-Payout Rules
+                if under_2 > 38.0 and digit in [0, 1]:
+                    trade_type, prediction, is_sure_trade = "DIGITUNDER", 2, True
+                elif under_3 > 46.0 and digit in [0, 1, 2]:
+                    trade_type, prediction, is_sure_trade = "DIGITUNDER", 3, True
+                elif over_8 > 22.0 and digit == 9:
+                    trade_type, prediction, is_sure_trade = "DIGITOVER", 8, True
+                elif over_7 > 38.0 and digit in [8, 9]:
+                    trade_type, prediction, is_sure_trade = "DIGITOVER", 7, True
+                
+                # B. High-Frequency Broad Target Rules (Maximum Payout Scaling)
+                elif under_8 > 66.0 and digit in [5, 6, 7]:
+                    trade_type, prediction, is_sure_trade = "DIGITUNDER", 8, False
+                elif over_2 > 66.0 and digit in [2, 3, 4]:
+                    trade_type, prediction, is_sure_trade = "DIGITOVER", 2, False
+
+                # Trade Execution Block
+                if trade_type is not None:
+                    # Dynamic Compound Balancing Formula
+                    calc_stake = st.session_state.tracked_balance * (risk_percentage / 100.0)
+                    base_stake = max(min_stake, round(calc_stake, 2))
+                    
+                    # Apply 1.5x stake multiplier for high-certainty trades
+                    if is_sure_trade:
+                        base_stake = round(base_stake * 1.5, 2)
+                        st.session_state.current_action = f"🎯 SNIPER IMBALANCE TRIGGERED! Boosting Stake to ${base_stake}"
+                    else:
+                        st.session_state.current_action = f"⚡ STANDARD CONDITION TRIGGERED: Executing Stake at ${base_stake}"
                         
-                        st.session_state.tracked_balance = realtime_bal
-                        prev_balance = realtime_bal
-                        
-                        # Direct metrics update
-                        balance_placeholder.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
-                        wins_losses_placeholder.metric("Wins / Losses", f"W: {st.session_state.total_wins} | L: {st.session_state.total_losses}")
-                        st.rerun()
-                    continue
-
-                # --- TASK 2: LIVE LAST DIGIT FREQUENCY ANALYZER ---
-                elif "tick" in data:
-                    tick_val = data["tick"]["quote"]
-                    tick_str = f"{tick_val:.2f}"
-                    last_digit = int(tick_str[-1])
-                    
-                    live_digit_placeholder.metric("Live Ticker (Last Digit)", f"{tick_val:.2f} [{last_digit}]")
-                    
-                    st.session_state.digit_history.append(last_digit)
-                    if len(st.session_state.digit_history) > 40:
-                        st.session_state.digit_history.pop(0)
-                        
-                    total_ticks = len(st.session_state.digit_history)
-                    freqs = {i: (st.session_state.digit_history.count(i) / total_ticks) * 100 for i in range(10)}
-                    
-                    # Live Spectrum Render View
-                    with spectrum_placeholder.container():
-                        pointer = "".join([f"{' ▲ ' if i == last_digit else '   ':^5}" for i in range(10)])
-                        nums = "".join([f"{i:^5}" for i in range(10)])
-                        pcts = "".join([f"{f'{freqs[i]:.0f}%':^5}" for i in range(10)])
-                        st.code(f"{pointer}\n{nums}\n{pcts}")
-
-                    # --- ADVANCED ACCURACY LOGIC ROUTERS ---
-                    under_2_density = freqs[0] + freqs[1]
-                    under_3_density = freqs[0] + freqs[1] + freqs[2]
-                    over_7_density = freqs[8] + freqs[9]
-                    over_8_density = freqs[9]
-                    under_8_density = sum([freqs[x] for x in range(8)])
-                    over_2_density = sum([freqs[x] for x in range(3, 10)])
-
-                    # Market Recommendation Evaluator Engine
-                    scores = {
-                        "UNDER 2": under_2_density, "UNDER 3": under_3_density,
-                        "OVER 7": over_7_density, "OVER 8": over_8_density,
-                        "UNDER 8": under_8_density, "OVER 2": over_2_density
-                    }
-                    best_strategy = max(scores, key=scores.get)
-                    highest_intensity = scores[best_strategy]
-                    
-                    with screener_placeholder.container():
-                        st.success(f"🎯 **RECOMMENDED:** `{best_strategy}` Strategy")
-                        st.metric("Signal Intensity Strength", f"{highest_intensity:.1f}%")
-
-                    trade_type = None
-                    prediction = None
-                    is_sure_trade = False
-                    
-                    # 1. 1000% High-Certainty Over/Under Intercept Targets
-                    if under_2_density > 34.0 and last_digit in [0, 1]:
-                        trade_type, prediction, is_sure_trade = "DIGITUNDER", 2, True
-                    elif under_3_density > 42.0 and last_digit in [0, 1, 2]:
-                        trade_type, prediction, is_sure_trade = "DIGITUNDER", 3, True
-                    elif over_8_density > 22.0 and last_digit == 9:
-                        trade_type, prediction, is_sure_trade = "DIGITOVER", 8, True
-                    elif over_7_density > 34.0 and last_digit in [8, 9]:
-                        trade_type, prediction, is_sure_trade = "DIGITOVER", 7, True
-                    
-                    # 2. Maximum Payout Baseline Sniper Entries
-                    elif under_8_density > 65.0 and last_digit in [5, 6, 7]:
-                        trade_type, prediction, is_sure_trade = "DIGITUNDER", 8, False
-                    elif over_2_density > 65.0 and last_digit in [2, 3, 4]:
-                        trade_type, prediction, is_sure_trade = "DIGITOVER", 2, False
-
-                    # --- DYNAMIC COMPOUNDING STAKE MATRIX ---
-                    if trade_type is not None:
-                        calc_compound = st.session_state.tracked_balance * (risk_percentage / 100.0)
-                        calculated_stake = max(min_stake, round(calc_compound, 2))
-                        
-                        # High Certainty Boost Verification Adjustments
-                        if is_sure_trade:
-                            calculated_stake = round(calculated_stake * 1.5, 2)
-                            st.session_state.current_action = f"🎯 IMBALANCE CONFIRMED! Boosting Position to ${calculated_stake} USD"
-                        else:
-                            st.session_state.current_action = f"⚡ STANDARD ALIGNMENT SCALPER ENVELOPE: Stake ${calculated_stake} USD"
-
-                        # Transmit Order Package Envelope
-                        contract_req = {
-                            "buy": 1,
-                            "price": calculated_stake,
-                            "parameters": {
-                                "amount": calculated_stake,
-                                "basis": "stake",
-                                "contract_type": trade_type,
-                                "currency": "USD",
-                                "duration": 1,
-                                "duration_unit": "t",
-                                "prediction": prediction,
-                                "symbol": symbol
-                            }
+                    order = {
+                        "buy": 1,
+                        "price": base_stake,
+                        "parameters": {
+                            "amount": base_stake,
+                            "basis": "stake",
+                            "contract_type": trade_type,
+                            "currency": "USD",
+                            "duration": 1,
+                            "duration_unit": "t",
+                            "prediction": prediction,
+                            "symbol": symbol
                         }
-                        await ws.send(json.dumps(contract_req))
-                        buy_res = json.loads(await ws.recv())
-                        
-                        if "buy" in buy_res:
-                            st.session_state.total_trades += 1
-                            st.session_state.history.insert(0, {
-                                "Timestamp": datetime.now().strftime("%H:%M:%S"),
-                                "Contract ID": buy_res["buy"]["contract_id"],
-                                "Target Model": f"{trade_type} {prediction}",
-                                "Sizing Profile": "⚡ AUTOMATED SURE BOOST" if is_sure_trade else "⏳ BASELINE SNIPER",
-                                "Risk Stake": f"${calculated_stake:.2f}",
-                                "Outcome": "⌛ PROCESSING EXPIRED REEFS...",
-                                "Net P/L": "$0.00"
-                            })
-                            # Core thread suspension window to match tick durations
-                            await asyncio.sleep(1.8)
-
-                # Dynamically update the execution summary table
-                if st.session_state.history:
-                    df = pd.DataFrame(st.session_state.history).head(12)
-                    table_placeholder.dataframe(df, use_container_width=True)
+                    }
+                    ws.send(json.dumps(order))
+                    buy_res = json.loads(ws.recv())
                     
-            except Exception as e:
-                st.sidebar.error(f"Engine Loop Exception: {str(e)}")
-                break
+                    if "buy" in buy_res:
+                        st.session_state.total_trades += 1
+                        st.session_state.history.insert(0, {
+                            "Timestamp": datetime.now().strftime("%H:%M:%S"),
+                            "Contract ID": buy_res["buy"]["contract_id"],
+                            "Target Setup": f"{trade_type} {prediction}",
+                            "Condition": "🔥 SURE POSITION" if is_sure_trade else "⚡ HIGH-FREQUENCY",
+                            "Stake Value": f"${base_stake:.2f}",
+                            "Outcome": "PROCESSING...",
+                            "Net P/L": "$0.00"
+                        })
+                        time.sleep(1.8) # Cool-down to let the 1-tick contract clear safely
+                        
+    except Exception as e:
+        st.session_state.current_action = f"⚠️ SYSTEM CONNECTION FAULT: {str(e)}"
+        st.session_state.running = False
 
-# --- RUN LOOP GATEWAY HUB ---
+# --- THREAD MANAGEMENT AND ACTIVATION ENGINE ---
 if st.session_state.running:
-    wins_losses_placeholder.metric("Wins / Losses", f"W: {st.session_state.total_wins} | L: {st.session_state.total_losses}")
-    asyncio.run(trade_loop())
-else:
-    status_placeholder.metric("Engine Status", "🔴 BOT DEACTIVATED")
-    balance_placeholder.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
-    wins_losses_placeholder.metric("Wins / Losses", f"W: {st.session_state.total_wins} | L: {st.session_state.total_losses}")
+    active_threads = [t.name for t in threading.enumerate()]
+    if "CHITI_ENGINE_WORKER" not in active_threads:
+        worker = threading.Thread(
+            target=websocket_worker, 
+            name="CHITI_ENGINE_WORKER",
+            args=(app_id, token, symbol, risk_percentage, min_stake, selected_market_name),
+            daemon=True
+        )
+        worker.start()
+
+# --- HIGH-VISIBILITY HUD INTERFACE ---
+col_status, col_blank = st.columns([3, 1])
+with col_status:
+    if st.session_state.running:
+        st.markdown("### STATUS: 🟢 CHITI MATRIX ACTIVE & EXECUTION TRADES")
+    else:
+        st.markdown("### STATUS: 🔴 ENGINE IDLE / SYSTEM PAUSED")
+
+# Micro-Organized Metrics Grid Layout
+m1, m2, m3, m4, m5 = st.columns(5)
+m1.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
+m2.metric("Total Executions", st.session_state.total_trades)
+m3.metric("Won Contracts", f"🟩 {st.session_state.total_wins}")
+m4.metric("Lost Contracts", f"🟥 {st.session_state.total_losses}")
+m5.metric("Live Ticker (Last Digit)", f"{st.session_state.live_quote:.2f} [{st.session_state.last_digit}]")
+
+# Core Activity Console Line
+st.info(f"**🤖 CONSOLE LOGGER STATUS:** {st.session_state.current_action}")
+
+# Dashboard Split Layout Columns
+layout_left, layout_right = st.columns([2, 3])
+
+with layout_left:
+    st.markdown("### 📊 Distribution Spectrum")
+    freq = st.session_state.digit_frequencies
+    pointer = "".join([f"{' ▲ ' if i == st.session_state.last_digit else '   ':^6}" for i in range(10)])
+    nums = "".join([f"{i:^6}" for i in range(10)])
+    pcts = "".join([f"{f'{freq.get(i, 0.0):.0f}%':^6}" for i in range(10)])
+    st.code(f"{pointer}\n{nums}\n{pcts}")
+    
+    st.markdown("### 🎯 Best Recommended Market Scanner")
+    scores_df = pd.DataFrame([
+        {"Market Index": k, "Imbalance Signal Intensity": f"{v:.1f}%"} 
+        for k, v in sorted(st.session_state.market_scores.items(), key=lambda item: item[1], reverse=True)
+    ])
+    st.dataframe(scores_df, use_container_width=True, hide_index=True)
+    st.caption("💡 Optimization Rule: Switch your 'Active Stream Target' inside the sidebar to the highest signal index above.")
+
+with layout_right:
+    st.markdown("### 📜 Real-Time Ledger")
+    if st.session_state.history:
+        df = pd.DataFrame(st.session_state.history).head(10)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.code("No trades logged in the current loop execution pipeline.")
+
+# --- DYNAMIC INTERFACE UI REFRESH PIN ---
+if st.session_state.running:
+    time.sleep(0.1)
+    st.rerun()
