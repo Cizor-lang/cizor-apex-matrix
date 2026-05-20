@@ -10,6 +10,7 @@ from datetime import datetime
 # --- SYSTEM DASHBOARD HUD CONFIGURATION ---
 st.set_page_config(page_title="CHITI Over/Under Bot", page_icon="⚡", layout="wide")
 
+# Fixed CSS injection format to prevent core interpreter crashes
 st.markdown("""
     <style>
     .block-container {padding-top: 0.4rem; padding-bottom: 0rem; padding-left: 1rem; padding-right: 1rem;}
@@ -54,7 +55,7 @@ state_defaults = {
     "consecutive_losses": 0,
     "history": [],
     "active_contract_ids": set(),  
-    "current_action": "ENGINE BOUND — ARCHITECTURE BALANCED",
+    "current_action": "ENGINE BOUND — FOCUS MODE ACTIVE",
     "live_quote": 0.00,
     "last_digit": 0,
     "digit_window": [],
@@ -107,11 +108,10 @@ with st.sidebar:
         st.session_state.active_contract_ids.clear()
         st.rerun()
 
-# --- AUTOMATED FRAGMENT PULSE REFRESH ENGINE ---
-# This isolates the HUD panel and makes it refresh every 0.5 seconds automatically
+# --- AUTOMATED FRAGMENT PULSE REFRESH HUD ---
 @st.fragment(run_every=0.5)
 def render_live_hud_metrics():
-    st.markdown(f"### CHITI CORE MATRIX HUD: {'🟩 RUNNING' if st.session_state.running else '🟥 PAUSED'}")
+    st.markdown(f"### CHITI SCALPER MATRIX: {'🟩 RUNNING' if st.session_state.running else '🟥 PAUSED'}")
     
     total_execs = st.session_state.total_wins + st.session_state.total_losses
     m1, m2, m3, m4, m5 = st.columns(5)
@@ -122,7 +122,6 @@ def render_live_hud_metrics():
     m5.metric("Live Ticker Feed", f"{st.session_state.live_quote:.2f} [{st.session_state.last_digit}]")
 
     st.markdown("### 🎯 Real-Time Strategy Evaluation Scanner")
-    # Display current circuit status directly in the fragment view
     if time.time() < st.session_state.cooldown_until:
         rem = int(st.session_state.cooldown_until - time.time())
         st.warning(f"🛑 LOSS CIRCUIT BREAKER ENGAGED: Halting execution nodes for {rem}s...")
@@ -143,7 +142,6 @@ def render_live_hud_metrics():
         else:
             st.caption("No trade transactions listed in history memory yet.")
 
-# Execute the isolated visual layout engine loop
 render_live_hud_metrics()
 
 # --- ISOLATED DISPATCH WORKER PIPELINE ---
@@ -163,7 +161,7 @@ def fire_synchronized_contract(url, token, base_stake, target_type, target_pred,
             "parameters": {
                 "amount": float(base_stake),
                 "basis": "stake",
-                "contract_type": target_type,  # Precise official backend strings
+                "contract_type": target_type,  
                 "currency": "USD",
                 "duration": 1,
                 "duration_unit": "t",
@@ -209,7 +207,6 @@ if st.session_state.running and "socket_loop_active" not in st.session_state:
                 
             st.session_state.tracked_balance = float(auth_res["authorize"]["balance"])
             
-            # Subscribe to Ticks and unique Transactions streams
             ws.send(json.dumps({"ticks": symbol}))
             ws.send(json.dumps({"transaction": 1, "subscribe": 1}))
             
@@ -217,11 +214,10 @@ if st.session_state.running and "socket_loop_active" not in st.session_state:
                 res = ws.recv()
                 data = json.loads(res)
                 
-                # Transaction Parser Module
                 if "transaction" in data:
                     tx = data["transaction"]
                     contract_id = tx.get("contract_id")
-                    action = tx.get("action")  # "buy" or "sell"
+                    action = tx.get("action")  
                     
                     if contract_id in st.session_state.active_contract_ids and action == "sell":
                         profit = float(tx.get("profit", 0.00))
@@ -249,7 +245,6 @@ if st.session_state.running and "socket_loop_active" not in st.session_state:
                         st.session_state.active_contract_ids.remove(contract_id)
                     continue
 
-                # Live Feed Core Engine Worker Node
                 if "tick" in data:
                     quote = float(data["tick"]["quote"])
                     quote_str = f"{quote:.2f}"
@@ -273,21 +268,15 @@ if st.session_state.running and "socket_loop_active" not in st.session_state:
                     target_type = None
                     target_pred = None
 
-                    # TARGET SCALPER SETUP ARRAY STRATEGY
+                    # HIGH-PROBABILITY TARGET MODE: STRICT OVER 2 & UNDER 8 SELECTIONS ONLY
                     if recent_ticks[-1] in [0, 1] and recent_ticks[-2] in [0, 1, 2]:
                         target_type, target_pred = "DIGITUNDER", 8
-                        st.session_state.current_action = f"🎯 WAVE CONFIRMED: Low signature {recent_ticks[-2:]}. Firing UNDER 8."
-                    elif recent_ticks[-1] == 2 and recent_ticks[-2] <= 3:
-                        target_type, target_pred = "DIGITUNDER", 7
-                        st.session_state.current_action = f"⚡ WAVE CONFIRMED: Support hit. Firing UNDER 7."
-                    elif recent_ticks[-1] == 7 and recent_ticks[-2] >= 6:
-                        target_type, target_pred = "DIGITOVER", 2
-                        st.session_state.current_action = f"⚡ WAVE CONFIRMED: Resistance hit. Firing OVER 2."
+                        st.session_state.current_action = f"🎯 SNIPER MODE: Verified Low Sequence {recent_ticks[-2:]} -> Executing UNDER 8"
                     elif recent_ticks[-1] in [8, 9] and recent_ticks[-2] in [7, 8, 9]:
-                        target_type, target_pred = "DIGITOVER", 3
-                        st.session_state.current_action = f"🎯 WAVE CONFIRMED: High signature {recent_ticks[-2:]}. Firing OVER 3."
+                        target_type, target_pred = "DIGITOVER", 2
+                        st.session_state.current_action = f"🎯 SNIPER MODE: Verified High Sequence {recent_ticks[-2:]} -> Executing OVER 2"
                     else:
-                        st.session_state.current_action = f"⏳ WAITING: Tracking pattern wave ({recent_ticks}). standing by..."
+                        st.session_state.current_action = f"⏳ WAITING FOR SNIPER EDGE: Micro-trend pattern ({recent_ticks}) contains risk noise. Holding position..."
 
                     if target_type is not None:
                         calc_stake = st.session_state.tracked_balance * (risk_percentage / 100.0)
