@@ -7,7 +7,7 @@ import threading
 import time
 from datetime import datetime
 
-# --- DASHBOARD UI CONFIGURATION ---
+# --- SYSTEM DASHBOARD HUD CONFIGURATION ---
 st.set_page_config(page_title="CHITI Over/Under Bot", page_icon="⚡", layout="wide")
 
 st.markdown("""
@@ -19,7 +19,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- CAPTIVE GATEWAY AUTHENTICATION ---
+# --- SECURITY GATEWAY INTERCEPT ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -36,7 +36,7 @@ if not st.session_state.authenticated:
             st.error("❌ INVALID SYSTEM PASSKEY.")
     st.stop()
 
-# --- MARKET MAP ---
+# --- MARKET MAP REGISTRY ---
 MARKETS = {
     "Volatility 10 (1s)": "1HZ10V",
     "Volatility 25 (1s)": "1HZ25V",
@@ -45,7 +45,7 @@ MARKETS = {
     "Volatility 100 (1s)": "1HZ100V"
 }
 
-# --- PERSISTENT MEMORY STATES ---
+# --- PERSISTENT LIFECYCLE ARRAY STATES ---
 state_defaults = {
     "running": False,
     "tracked_balance": 0.00,
@@ -53,7 +53,8 @@ state_defaults = {
     "total_losses": 0,
     "consecutive_losses": 0,
     "history": [],
-    "current_action": "ENGINE INITIALIZED — STANDBY PROFILE",
+    "active_contract_ids": set(),  # Tracks open tickets to prevent duplication
+    "current_action": "ENGINE BOUND — ARCHITECTURE BALANCED",
     "live_quote": 0.00,
     "last_digit": 0,
     "digit_window": [],
@@ -64,9 +65,10 @@ for key, val in state_defaults.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
+# --- SYNCHRONIZED COUNTER CALCULATION ---
 total_executions = st.session_state.total_wins + st.session_state.total_losses
 
-# --- SIDEBAR CONTROL CONTROL ---
+# --- SIDEBAR CONTROL PANEL ---
 with st.sidebar:
     st.header("⚙️ Core Parameters")
     st.markdown("**AUTHOR:** CIZOR THE BADDEST")
@@ -90,6 +92,7 @@ with st.sidebar:
                 st.session_state.digit_window = []
                 st.session_state.consecutive_losses = 0
                 st.session_state.cooldown_until = 0
+                st.session_state.active_contract_ids.clear()
                 st.rerun()
             else:
                 st.error("Enter API Token!")
@@ -104,10 +107,11 @@ with st.sidebar:
         st.session_state.total_losses = 0
         st.session_state.consecutive_losses = 0
         st.session_state.history.clear()
+        st.session_state.active_contract_ids.clear()
         st.rerun()
 
-# --- HIGH-VISIBILITY HUD DASHBOARD ---
-st.markdown(f"### CHITI CORE SNAER MATRIX HUD: {'🟩 RUNNING' if st.session_state.running else '🟥 PAUSED'}")
+# --- HUD DISPLAY CONTAINER MATRIX ---
+st.markdown(f"### CHITI CORE MATRIX HUD: {'🟩 RUNNING' if st.session_state.running else '🟥 PAUSED'}")
 
 m1, m2, m3, m4, m5 = st.columns(5)
 balance_slot = m1.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
@@ -127,7 +131,7 @@ with layout_right:
     st.markdown("### 📜 Real-Time Ledger")
     ledger_slot = st.empty()
 
-# --- ISOLATED THREAD PACKET DISPATCHER ---
+# --- ISOLATED DISPATCH WORKER PIPELINE ---
 def fire_synchronized_contract(url, token, base_stake, target_type, target_pred, symbol):
     try:
         dispatch_ws = websocket.WebSocket(sslopt={"cert_reqs": ssl.CERT_NONE})
@@ -138,14 +142,13 @@ def fire_synchronized_contract(url, token, base_stake, target_type, target_pred,
         if "error" in auth_raw:
             return
 
-        # FIXED ENUMERATION PAYLOAD MAPPINGS FOR DERIV API BACKEND
         order = {
             "buy": 1,
             "price": float(base_stake),
             "parameters": {
                 "amount": float(base_stake),
                 "basis": "stake",
-                "contract_type": target_type,  # Passed directly as DIGITOVER or DIGITUNDER
+                "contract_type": target_type,  # Strict API enumerations
                 "currency": "USD",
                 "duration": 1,
                 "duration_unit": "t",
@@ -159,19 +162,21 @@ def fire_synchronized_contract(url, token, base_stake, target_type, target_pred,
         dispatch_ws.close()
         
         if "buy" in buy_res:
+            c_id = buy_res["buy"]["contract_id"]
+            st.session_state.active_contract_ids.add(c_id)
             timestamp_str = datetime.now().strftime("%H:%M:%S")
             st.session_state.history.insert(0, {
                 "Timestamp": timestamp_str,
-                "Contract ID": buy_res["buy"]["contract_id"],
+                "Contract ID": c_id,
                 "Setup Strategy": f"{target_type} {target_pred}",
                 "Stake Profile": f"${base_stake:.2f}",
-                "Outcome": "PROCESSING...",
+                "Outcome": "PENDING TRANSACTION...",
                 "Net P/L": "$0.00"
             })
     except Exception:
         pass
 
-# --- MAIN LOOP RUNNER ---
+# --- MAIN EXECUTION FEED PIPELINE ---
 if st.session_state.running:
     url = f"wss://ws.derivws.com/websockets/v3?app_id={app_id}"
     ws = websocket.WebSocket(sslopt={"cert_reqs": ssl.CERT_NONE})
@@ -188,48 +193,58 @@ if st.session_state.running:
         st.session_state.tracked_balance = float(auth_res["authorize"]["balance"])
         balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
         
+        # Subscribe to Real-Time Ticks + Strict Transaction Logging Stream
         ws.send(json.dumps({"ticks": symbol}))
-        ws.send(json.dumps({"balance": 1, "subscribe": 1}))
-        
-        prev_balance = st.session_state.tracked_balance
+        ws.send(json.dumps({"transaction": 1, "subscribe": 1}))
         
         while st.session_state.running:
             res = ws.recv()
             data = json.loads(res)
             
-            if "balance" in data:
-                new_bal = float(data["balance"]["balance"])
-                diff = new_bal - prev_balance
-                if abs(diff) > 0.001:
-                    if diff > 0:
+            # --- FIXED TRANSACTION PARSER NODE (ELIMINATES DOUBLE-COUNT RACE CONDITIONS) ---
+            if "transaction" in data:
+                tx = data["transaction"]
+                contract_id = tx.get("contract_id")
+                action = tx.get("action")  # "buy" or "sell"
+                
+                # Check if this contract belongs to our bot's active history array
+                if contract_id in st.session_state.active_contract_ids and action == "sell":
+                    profit = float(tx.get("profit", 0.00))
+                    st.session_state.tracked_balance = float(tx.get("balance", st.session_state.tracked_balance))
+                    
+                    # Update metrics specifically matched to the individual settlement transaction ID
+                    if profit > 0:
                         st.session_state.total_wins += 1
-                        st.session_state.consecutive_losses = 0  # Clear loss tracking on win
-                        if st.session_state.history:
-                            st.session_state.history[0]["Outcome"] = "🟢 WIN"
-                            st.session_state.history[0]["Net P/L"] = f"+${diff:.2f}"
+                        st.session_state.consecutive_losses = 0
+                        outcome_str, pl_str = "🟢 WIN", f"+${profit:.2f}"
                     else:
                         st.session_state.total_losses += 1
                         st.session_state.consecutive_losses += 1
-                        if st.session_state.history:
-                            st.session_state.history[0]["Outcome"] = "🔴 LOSS"
-                            st.session_state.history[0]["Net P/L"] = f"-${abs(diff):.2f}"
+                        outcome_str, pl_str = "🔴 LOSS", f"-${abs(profit):.2f}"
                         
-                        # Guard rails: If encountering a streak of losses, flag a circuit break cooldown
                         if st.session_state.consecutive_losses >= 2:
                             st.session_state.cooldown_until = time.time() + 15.0
                             st.session_state.consecutive_losses = 0
                     
-                    st.session_state.tracked_balance = new_bal
-                    prev_balance = new_bal
+                    # Update row layout inside the ledger
+                    for row in st.session_state.history:
+                        if row["Contract ID"] == contract_id:
+                            row["Outcome"] = outcome_str
+                            row["Net P/L"] = pl_str
+                            break
                     
+                    # Remove token from active memory set now that transaction lifecycle has concluded
+                    st.session_state.active_contract_ids.remove(contract_id)
+                    
+                    # Rerender components cleanly without duplication updates
                     balance_slot.metric("Account Balance", f"${st.session_state.tracked_balance:,.2f} USD")
                     wins_slot.metric("Won Contracts", f"🟩 {st.session_state.total_wins}")
                     losses_slot.metric("Lost Contracts", f"🟥 {st.session_state.total_losses}")
                     trades_slot.metric("Total Executions", st.session_state.total_wins + st.session_state.total_losses)
-                    if st.session_state.history:
-                        ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(10), use_container_width=True, hide_index=True)
+                    ledger_slot.dataframe(pd.DataFrame(st.session_state.history).head(10), use_container_width=True, hide_index=True)
                 continue
 
+            # --- LIVE TICK AGGREGATOR NODE ---
             if "tick" in data:
                 quote = float(data["tick"]["quote"])
                 quote_str = f"{quote:.2f}"
@@ -248,41 +263,38 @@ if st.session_state.running:
                 counts = "".join([f"{st.session_state.digit_window.count(i):^5}" for i in range(10)])
                 spectrum_slot.code(f"Digits:     {nums}\nOccurrences:{counts}\nTotal Samples: {win_len}/15")
                 
-                # --- CIRCUIT BREAKER DELAY ---
+                # Circuit breaker status checker node
                 if time.time() < st.session_state.cooldown_until:
                     rem = int(st.session_state.cooldown_until - time.time())
-                    strategy_log_slot.warning(f"🛑 LOSS CIRCUIT BREAKER ENGAGED: Stepping away from market chaos for {rem}s...")
+                    strategy_log_slot.warning(f"🛑 LOSS CIRCUIT BREAKER ENGAGED: Halting execution nodes for {rem}s...")
                     continue
 
                 if len(st.session_state.digit_window) < 4:
-                    strategy_log_slot.info("⚙️ Human Analyser: Gathering stream fingerprint patterns...")
+                    strategy_log_slot.info("⚙️ Human Analyser: Syncing underlying market feed signature matrix...")
                     continue
                 
-                # Extract trailing context markers to evaluate cluster velocity
                 recent_ticks = st.session_state.digit_window[-4:]
-                
                 target_type = None
                 target_pred = None
-                reason = "Scanning digit distribution spectrum ratios..."
+                reason = "Scanning digit wave anomalies..."
 
-                # HUMAN PATTERN MATRIX — WAITS FOR CONFIRMED MULTI-TICK WAVE TRENDS
-                # Over 2/3 and Under 7/8 Strategy Array Focus
+                # TARGET ANALYSIS CONFIRMATION WAVE CHECKS
                 if recent_ticks[-1] in [0, 1] and recent_ticks[-2] in [0, 1, 2]:
                     target_type, target_pred = "DIGITUNDER", 8
-                    reason = f"🎯 SNIPER ANALYSIS: True Low sequence confirmed {recent_ticks[-2:]}. Executing verified UNDER 8."
+                    reason = f"🎯 WAVE MATCHED: Low profile confirmed {recent_ticks[-2:]}. Executing UNDER 8 contract payload."
                 elif recent_ticks[-1] == 2 and recent_ticks[-2] <= 3:
                     target_type, target_pred = "DIGITUNDER", 7
-                    reason = f"⚡ SNIPER ANALYSIS: Support cluster identified. Executing verified UNDER 7."
+                    reason = f"⚡ WAVE MATCHED: Support pattern confirmed. Executing UNDER 7 contract payload."
                 elif recent_ticks[-1] == 7 and recent_ticks[-2] >= 6:
                     target_type, target_pred = "DIGITOVER", 2
-                    reason = f"⚡ SNIPER ANALYSIS: Resistance cluster identified. Executing verified OVER 2."
+                    reason = f"⚡ WAVE MATCHED: Resistance pattern confirmed. Executing OVER 2 contract payload."
                 elif recent_ticks[-1] in [8, 9] and recent_ticks[-2] in [7, 8, 9]:
                     target_type, target_pred = "DIGITOVER", 3
-                    reason = f"🎯 SNIPER ANALYSIS: True High sequence confirmed {recent_ticks[-2:]}. Executing verified OVER 3."
+                    reason = f"🎯 WAVE MATCHED: High profile confirmed {recent_ticks[-2:]}. Executing OVER 3 contract payload."
                 else:
-                    reason = f"⏳ HUMAN SCANNER: Stream pattern ({recent_ticks}) contains noisy data. Safely holding entries until conditions align."
+                    reason = f"⏳ WAITING: Current pattern ({recent_ticks}) is tracking noise. Standing by for optimal setups."
 
-                strategy_log_slot.info(f"**Engine Status:** {reason}")
+                strategy_log_slot.info(f"**Engine Brain:** {reason}")
 
                 if target_type is not None:
                     calc_stake = st.session_state.tracked_balance * (risk_percentage / 100.0)
