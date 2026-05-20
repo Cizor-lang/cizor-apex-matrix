@@ -6,7 +6,7 @@ import ssl
 from websocket import create_connection
 
 # --- EXCLUSIVE SYSTEM HEADER CONFIGURATION ---
-st.set_page_config(page_title="Cizor Sniper Matrix Pro", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="CHITI SNIPER MATRIX PRO", page_icon="⚡", layout="wide")
 
 # --- INITIAL PASSKEY SECURITY GATEWAY ---
 if "authenticated" not in st.session_state:
@@ -161,10 +161,8 @@ if st.session_state.engine_running:
     selected_symbol = MARKET_MAP[st.session_state.current_market]
     
     try:
-        # Open ONE persistent connection
         ws = create_connection("wss://ws.derivws.com/websockets/v3?app_id=1089", sslopt={"cert_reqs": ssl.CERT_NONE})
         
-        # Handle authentication ONCE per script cycle
         if st.session_state.active_token:
             ws.send(json.dumps({"authorize": st.session_state.active_token}))
             auth_res = json.loads(ws.recv())
@@ -179,15 +177,12 @@ if st.session_state.engine_running:
                 acct_id_string = client_data.get("loginid", "")
                 st.session_state.detected_account_type = f"REAL TRADING ACTIVE ({acct_id_string})" if not acct_id_string.startswith("VRTC") else f"DEMO TRADING ACTIVE ({acct_id_string})"
         
-        # Subscribe to continuous live market tick stream 
         ws.send(json.dumps({"ticks": selected_symbol}))
         
-        # This nested loop stays open and pulls incoming stream messages instantly
         while st.session_state.engine_running:
             raw_msg = ws.recv()
             msg_data = json.loads(raw_msg)
             
-            # Extract live prices zero-delay
             if "tick" in msg_data:
                 live_price = float(msg_data["tick"]["quote"])
                 live_price_str = f"{live_price:.2f}"
@@ -196,7 +191,6 @@ if st.session_state.engine_running:
             else:
                 continue
 
-            # Process market drift and market shifts
             st.session_state.market_ticks_count += 1
             if st.session_state.market_ticks_count >= st.session_state.market_lock_duration:
                 old_market = st.session_state.current_market
@@ -206,7 +200,7 @@ if st.session_state.engine_running:
                 st.session_state.digit_history.clear()
                 st.session_state.current_trend_runs = 0
                 st.session_state.system_cooldown_active = False
-                break # Break out to reopen stream on the new market variant
+                break 
 
             st.session_state.digit_history.append(live_tick_digit)
             if len(st.session_state.digit_history) > 40:
@@ -215,9 +209,11 @@ if st.session_state.engine_running:
             total_ticks = len(st.session_state.digit_history)
             frequencies = {i: (st.session_state.digit_history.count(i) / total_ticks) * 100 if total_ticks > 0 else 0 for i in range(10)}
 
+            # --- ACCURACY IMPALANCE STRATEGY ROUTERS ---
             under_2_density = frequencies[0] + frequencies[1]
             under_3_density = frequencies[0] + frequencies[1] + frequencies[2]
             over_7_density = frequencies[8] + frequencies[9]
+            over_8_density = frequencies[9]
 
             strategy_choice = "NEUTRAL"
             action_authorized = False
@@ -225,54 +221,71 @@ if st.session_state.engine_running:
             target_trigger_digits = []
             is_1000_percent_sure = False
             active_stake = standard_calculated_stake
+            contract_type = ""
+            barrier_target = ""
 
             recent_ticks = st.session_state.digit_history[-6:] if total_ticks >= 6 else st.session_state.digit_history
 
             if not st.session_state.system_cooldown_active and total_ticks >= 20:
-                if frequencies[8] > 26.0 and recent_ticks[-1] == 8:
+                # 1. 1000% Sure Intercepts
+                if frequencies[9] > 25.0 and recent_ticks[-1] == 9:
                     strategy_choice = "OVER 8"
                     payout_multiplier = 8.00
+                    target_trigger_digits = [9]
+                    action_authorized = True
+                    is_1000_percent_sure = True
+                    active_stake = high_certainty_stake
+                    contract_type = "DIGITOVER"
+                    barrier_target = "8"
+                elif frequencies[8] > 25.0 and recent_ticks[-1] == 8:
+                    strategy_choice = "OVER 7"
+                    payout_multiplier = 3.90
                     target_trigger_digits = [8]
                     action_authorized = True
                     is_1000_percent_sure = True
                     active_stake = high_certainty_stake
-                elif under_2_density > 32.0 and recent_ticks[-1] in [2, 3]:
+                    contract_type = "DIGITOVER"
+                    barrier_target = "7"
+                elif under_2_density > 35.0 and recent_ticks[-1] in [0, 1]:
                     strategy_choice = "UNDER 2"
                     payout_multiplier = 3.90
-                    target_trigger_digits = [2, 3]
+                    target_trigger_digits = [0, 1]
                     action_authorized = True
                     is_1000_percent_sure = True
                     active_stake = high_certainty_stake
-                elif over_7_density > 32.0 and recent_ticks[-1] in [6, 7]:
-                    strategy_choice = "OVER 7"
-                    payout_multiplier = 3.90
-                    target_trigger_digits = [6, 7]
-                    action_authorized = True
-                    is_1000_percent_sure = True
-                    active_stake = high_certainty_stake
-                elif under_3_density > 40.0 and recent_ticks[-1] in [3, 4]:
+                    contract_type = "DIGITUNDER"
+                    barrier_target = "2"
+                elif under_3_density > 42.0 and recent_ticks[-1] in [0, 1, 2]:
                     strategy_choice = "UNDER 3"
                     payout_multiplier = 2.20
-                    target_trigger_digits = [3, 4]
+                    target_trigger_digits = [0, 1, 2]
                     action_authorized = True
                     is_1000_percent_sure = True
                     active_stake = high_certainty_stake
+                    contract_type = "DIGITUNDER"
+                    barrier_target = "3"
+                
+                # 2. Standard Baseline Sniper Entries
                 else:
                     under_8_density = sum([frequencies[x] for x in range(8)])
                     over_2_density = sum([frequencies[x] for x in range(3, 10)])
                     
-                    if under_8_density > 58.0:  
+                    if under_8_density > 62.0 and recent_ticks[-1] in [5, 6, 7]:  
                         strategy_choice = "UNDER 8"
                         payout_multiplier = 1.10
-                        target_trigger_digits = [6, 7, 8]
+                        target_trigger_digits = [5, 6, 7]
                         action_authorized = True
                         active_stake = standard_calculated_stake
-                    elif over_2_density > 58.0:
+                        contract_type = "DIGITUNDER"
+                        barrier_target = "8"
+                    elif over_2_density > 62.0 and recent_ticks[-1] in [2, 3, 4]:
                         strategy_choice = "OVER 2"
                         payout_multiplier = 1.10
-                        target_trigger_digits = [1, 2, 3]
+                        target_trigger_digits = [2, 3, 4]
                         action_authorized = True
                         active_stake = standard_calculated_stake
+                        contract_type = "DIGITOVER"
+                        barrier_target = "2"
 
             if action_authorized:
                 group_freqs = {d: frequencies[d] for d in target_trigger_digits}
@@ -321,9 +334,6 @@ if st.session_state.engine_running:
                         st.success(f"🔥 ZERO-DELAY CONTRACT ENTRY TRIGGERED: RUNNING [{strategy_choice}] 🔥")
                         
                         if st.session_state.active_token:
-                            contract_type = "DIGITOVER" if "OVER" in strategy_choice else "DIGITUNDER"
-                            barrier_target = strategy_choice.split(" ")[-1]
-                            
                             buy_req = json.dumps({
                                 "buy": 1,
                                 "price": active_stake,
@@ -339,15 +349,20 @@ if st.session_state.engine_running:
                                 }
                             })
                             ws.send(buy_req)
-                            # Pull execution response from stream cleanly
-                            buy_res = json.loads(ws.recv())
+                            raw_buy_res = ws.recv()
+                            buy_res = json.loads(raw_buy_res)
                             
                             st.session_state.total_trades += 1
                             st.session_state.current_trend_runs += 1
                             
                             if buy_res and "error" not in buy_res:
+                                # PULL IMMEDIATE BALANCE RERUN TO UNSTUCK MONITOR
+                                ws.send(json.dumps({"authorize": st.session_state.active_token}))
+                                updated_auth = json.loads(ws.recv())
+                                if "authorize" in updated_auth:
+                                    st.session_state.tracked_balance = float(updated_auth["authorize"]["balance"])
+                                
                                 profit = float(buy_res["buy"].get("profit", 0))
-                                st.session_state.tracked_balance = float(buy_res["buy"].get("balance_after", st.session_state.tracked_balance))
                                 if profit > 0:
                                     st.session_state.total_wins += 1
                                     st.session_state.last_trade_status = f"🟢 WIN COMPILING: +${profit:.2f} DEPOSITED SECURELY"
@@ -357,11 +372,10 @@ if st.session_state.engine_running:
                             else:
                                 st.session_state.last_trade_status = f"❌ API EXCEPTION: {buy_res.get('error', {}).get('message', 'Network Drop')}"
                         else:
-                            # Simulation Mode
                             st.session_state.total_trades += 1
                             st.session_state.current_trend_runs += 1
                             outcome_roll = random.uniform(0, 100)
-                            win_map = {"OVER 8": [9], "UNDER 2": [0, 1], "OVER 7": [8, 9], "UNDER 3": [0, 1, 2], "UNDER 8": list(range(8)), "OVER 2": list(range(3, 10))}
+                            win_map = {"OVER 8": [9], "OVER 7": [8, 9], "UNDER 2": [0, 1], "UNDER 3": [0, 1, 2], "UNDER 8": list(range(8)), "OVER 2": list(range(3, 10))}
                             win_achieved = live_tick_digit in win_map.get(strategy_choice, [])
 
                             if win_achieved or (outcome_roll <= 35.0):
@@ -377,7 +391,7 @@ if st.session_state.engine_running:
                         if st.session_state.current_trend_runs >= max_runs_per_trend:
                             st.session_state.system_cooldown_active = True
                             st.session_state.cooldown_ticks = 0
-                        time.sleep(2.0)
+                        time.sleep(1.5)
                 else:
                     st.info("🔍 SCANNING FREQUENCY SPECTRUM MATRIX FOR TARGET PROFILE...")
 
@@ -388,7 +402,6 @@ if st.session_state.engine_running:
                 st.metric(label="🟩 WON CONTRACTS", value=st.session_state.total_wins)
                 st.metric(label="🟥 LOST CONTRACTS", value=st.session_state.total_losses)
                 
-            # Yield control back to CPU briefly to smooth rendering frame pacing
             time.sleep(0.05)
             
     except Exception as e:
